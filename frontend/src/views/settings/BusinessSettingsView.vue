@@ -1,0 +1,685 @@
+<template>
+  <section class="page-section settings-page">
+    <div class="module-hero">
+      <div class="module-hero-copy">
+        <p class="page-kicker">Datos y Configuraciones</p>
+        <h1 class="page-title">Informacion del Entorno Empresarial</h1>
+        <p class="panel-text">
+          Unifica identidad corporativa, multiempresa y politicas operativas del negocio
+          en una sola ficha administrativa.
+        </p>
+      </div>
+
+      <div class="module-hero-meta">
+        <div class="module-meta-box">
+          <span>Negocio</span>
+          <strong>{{ settings.trade_name || settings.business_name || "Sin configurar" }}</strong>
+        </div>
+        <div class="module-meta-box">
+          <span>Entornos</span>
+          <strong>{{ environments.length }}</strong>
+        </div>
+        <div class="module-meta-box">
+          <span>Politicas</span>
+          <strong>{{ enabledPolicies }} activas</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-workspace">
+      <aside class="settings-subnav panel-card">
+        <button
+          v-for="item in sections"
+          :key="item.key"
+          type="button"
+          class="settings-subnav-item"
+          :class="{ active: currentSection === item.key }"
+          @click="currentSection = item.key"
+        >
+          <i class="bi" :class="item.icon"></i>
+          <div>
+            <strong>{{ item.label }}</strong>
+            <span>{{ item.caption }}</span>
+          </div>
+        </button>
+      </aside>
+
+      <div class="settings-panels">
+        <div v-if="success" class="settings-feedback settings-feedback-success">
+          <i class="bi bi-check-circle-fill"></i>
+          <span>{{ success }}</span>
+        </div>
+        <div v-if="error" class="settings-feedback settings-feedback-error">
+          <i class="bi bi-exclamation-circle-fill"></i>
+          <span>{{ error }}</span>
+        </div>
+
+        <article v-if="currentSection === 'business'" class="panel-card">
+          <div class="panel-head">
+            <div>
+              <span class="products-section-kicker">Informacion del negocio</span>
+              <h3>Perfil empresarial</h3>
+            </div>
+          </div>
+
+          <form class="settings-form" @submit.prevent="submitSettings">
+            <div class="product-form-grid">
+              <label class="field-group field-span-2">
+                <span>Razon social</span>
+                <input v-model="settings.legal_name" class="form-control" type="text" />
+              </label>
+
+              <label class="field-group field-span-2">
+                <span>Nombre comercial</span>
+                <input v-model="settings.trade_name" class="form-control" type="text" required />
+              </label>
+
+              <label class="field-group field-span-2">
+                <span>Titulo de la app</span>
+                <input v-model="settings.app_title" class="form-control" type="text" />
+              </label>
+
+              <label class="field-group field-span-2">
+                <span>Subtitulo sidebar</span>
+                <input v-model="settings.sidebar_subtitle" class="form-control" type="text" />
+              </label>
+
+              <label class="field-group">
+                <span>RUC</span>
+                <input v-model="settings.ruc" class="form-control" type="text" />
+              </label>
+
+              <label class="field-group">
+                <span>Telefono</span>
+                <input v-model="settings.phone" class="form-control" type="text" />
+              </label>
+
+              <label class="field-group">
+                <span>Telefonos</span>
+                <input v-model="settings.phones" class="form-control" type="text" />
+              </label>
+
+              <label class="field-group">
+                <span>Correo</span>
+                <input v-model="settings.email" class="form-control" type="email" />
+              </label>
+
+              <label class="field-group field-span-2">
+                <span>Direccion</span>
+                <textarea v-model="settings.address" class="form-control settings-textarea"></textarea>
+              </label>
+
+              <label class="field-group field-span-2">
+                <span>Pagina web</span>
+                <input v-model="settings.website" class="form-control" type="text" />
+              </label>
+
+              <label class="field-group">
+                <span>Tema visual</span>
+                <select v-model="settings.theme_code" class="form-control">
+                  <option value="default">Default</option>
+                  <option value="corporate">Corporate</option>
+                  <option value="odoo">Odoo</option>
+                </select>
+              </label>
+
+              <label class="field-group">
+                <span>Moneda base costos/precios</span>
+                <select v-model="settings.pricing_currency" class="form-control">
+                  <option value="CS">Cordobas (C$)</option>
+                  <option value="USD">Dolares (USD)</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="panel-head">
+              <div>
+                <span class="products-section-kicker">Identidad visual</span>
+                <h3>Branding por contexto</h3>
+              </div>
+            </div>
+
+            <div class="settings-logo-grid">
+              <div v-for="field in logoFields" :key="field.key" class="settings-logo-card">
+                <span class="settings-logo-label">{{ field.label }}</span>
+                <div class="settings-logo-preview">
+                  <img v-if="previewFor(field)" :src="previewFor(field)" :alt="field.label" />
+                  <div v-else class="settings-logo-empty">
+                    <i class="bi bi-image"></i>
+                    <span>Sin imagen</span>
+                  </div>
+                </div>
+                <input
+                  class="form-control settings-file-input"
+                  type="file"
+                  accept="image/*"
+                  @change="onFileChange(field.key, $event)"
+                />
+              </div>
+            </div>
+
+            <div class="product-form-actions">
+              <Button severity="secondary" variant="outlined" type="button" @click="loadSettings">
+                Recargar
+              </Button>
+              <Button :disabled="loading" type="submit">
+                {{ loading ? "Guardando..." : "Guardar perfil empresarial" }}
+              </Button>
+            </div>
+          </form>
+        </article>
+
+        <article v-else-if="currentSection === 'environment'" class="panel-card">
+          <div class="panel-head">
+            <div>
+              <span class="products-section-kicker">Entorno empresarial</span>
+              <h3>Multiempresa y base de datos</h3>
+            </div>
+          </div>
+
+          <div class="settings-env-layout">
+            <form class="settings-env-form" @submit.prevent="submitEnvironment">
+              <div class="product-form-grid">
+                <label class="field-group">
+                  <span>Clave de empresa</span>
+                  <input
+                    v-model="environmentForm.company_key"
+                    class="form-control"
+                    type="text"
+                    :disabled="Boolean(environmentForm.id)"
+                    placeholder="hollywood_pacas"
+                  />
+                </label>
+
+                <label class="field-group field-span-2">
+                  <span>Nombre visible</span>
+                  <input
+                    v-model="environmentForm.company_name"
+                    class="form-control"
+                    type="text"
+                    placeholder="Hollywood Pacas"
+                  />
+                </label>
+
+                <label class="field-group field-span-2">
+                  <span>DATABASE_URL</span>
+                  <input
+                    v-model="environmentForm.database_url"
+                    class="form-control"
+                    type="text"
+                    placeholder="postgresql://user:1234@localhost:5432/hollpacas"
+                  />
+                </label>
+
+                <label class="products-checkbox">
+                  <input v-model="environmentForm.activate" type="checkbox" />
+                  <span>Activar al guardar</span>
+                </label>
+              </div>
+
+              <div class="product-form-actions">
+                <Button type="button" severity="secondary" variant="outlined" @click="resetEnvironmentForm">
+                  Limpiar
+                </Button>
+                <Button :disabled="environmentLoading" type="submit">
+                  {{ environmentLoading ? "Guardando..." : environmentForm.id ? "Actualizar entorno" : "Registrar entorno" }}
+                </Button>
+              </div>
+            </form>
+
+            <div class="settings-env-list">
+              <div
+                v-for="environment in environments"
+                :key="environment.id"
+                class="settings-env-card"
+                :class="{ active: environment.is_active }"
+              >
+                <div class="settings-env-head">
+                  <div>
+                    <strong>{{ environment.company_name }}</strong>
+                    <span>{{ environment.company_key }}</span>
+                  </div>
+                  <Tag :severity="environment.is_active ? 'success' : 'contrast'" :value="environment.is_active ? 'Activo' : 'Inactivo'" />
+                </div>
+
+                <code class="settings-env-code">{{ environment.database_url }}</code>
+
+                <div class="settings-env-actions">
+                  <Button
+                    type="button"
+                    severity="secondary"
+                    variant="outlined"
+                    size="small"
+                    @click="editEnvironment(environment)"
+                  >
+                    Editar
+                  </Button>
+                  <Button
+                    v-if="!environment.is_active"
+                    type="button"
+                    size="small"
+                    @click="activateEnvironment(environment.id)"
+                  >
+                    Activar
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article v-else-if="currentSection === 'policies'" class="panel-card">
+          <div class="panel-head">
+            <div>
+              <span class="products-section-kicker">Politicas del negocio</span>
+              <h3>Reglas operativas del entorno</h3>
+            </div>
+          </div>
+
+          <form class="settings-form" @submit.prevent="submitSettings">
+            <div class="settings-policy-grid">
+              <label v-for="policy in policyFields" :key="policy.key" class="settings-policy-card">
+                <div class="settings-policy-copy">
+                  <strong>{{ policy.label }}</strong>
+                  <span>{{ policy.help }}</span>
+                </div>
+                <input v-model="settings[policy.key]" type="checkbox" />
+              </label>
+
+              <label class="field-group">
+                <span>Moneda base de costos y precios</span>
+                <select v-model="settings.pricing_currency" class="form-control">
+                  <option value="CS">Cordobas (C$)</option>
+                  <option value="USD">Dolares (USD)</option>
+                </select>
+              </label>
+
+              <label class="field-group">
+                <span>Porcentaje de ganancia (%)</span>
+                <input
+                  v-model.number="settings.price_margin_percent"
+                  class="form-control"
+                  type="number"
+                  min="0"
+                  step="1"
+                />
+              </label>
+            </div>
+
+            <div class="product-form-actions">
+              <Button :disabled="loading" type="submit">
+                {{ loading ? "Guardando..." : "Guardar politicas" }}
+              </Button>
+            </div>
+          </form>
+        </article>
+
+        <article v-else class="panel-card">
+          <div class="panel-head">
+            <div>
+              <span class="products-section-kicker">Interfaz de ventas</span>
+              <h3>Arquitectura activa del POS</h3>
+            </div>
+          </div>
+
+          <form class="settings-form" @submit.prevent="submitSettings">
+            <div class="product-form-grid">
+              <label class="field-group field-span-2">
+                <span>Tipo de interfaz</span>
+                <select v-model="settings.sales_interface_code" class="form-control">
+                  <option
+                    v-for="option in salesInterfaceOptions"
+                    :key="option.code"
+                    :value="option.code"
+                  >
+                    {{ option.label }}
+                  </option>
+                </select>
+              </label>
+            </div>
+
+            <div class="settings-env-list">
+              <div
+                v-for="option in salesInterfaceOptions"
+                :key="option.code"
+                class="settings-env-card"
+                :class="{ active: settings.sales_interface_code === option.code }"
+              >
+                <div class="settings-env-head">
+                  <div>
+                    <strong>{{ option.label }}</strong>
+                    <span>{{ option.code }}</span>
+                  </div>
+                  <Tag
+                    :severity="settings.sales_interface_code === option.code ? 'success' : 'contrast'"
+                    :value="settings.sales_interface_code === option.code ? 'Activa' : 'Disponible'"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="product-form-actions">
+              <Button :disabled="loading" type="submit">
+                {{ loading ? "Guardando..." : "Guardar interfaz de ventas" }}
+              </Button>
+            </div>
+          </form>
+        </article>
+
+      </div>
+    </div>
+  </section>
+</template>
+
+<script setup>
+import { computed, onMounted, reactive, ref } from "vue";
+import Button from "primevue/button";
+import Tag from "primevue/tag";
+
+import {
+  activateCompanyEnvironment,
+  buildAssetUrl,
+  createCompanyEnvironment,
+  fetchBusinessSettings,
+  fetchCompanyEnvironments,
+  saveBusinessSettings,
+  updateCompanyEnvironment,
+} from "../../services/settings";
+
+const sections = [
+  {
+    key: "business",
+    label: "Informacion del negocio",
+    caption: "Perfil, branding y datos corporativos",
+    icon: "bi-building",
+  },
+  {
+    key: "environment",
+    label: "Entorno empresarial",
+    caption: "Multiempresa y base de datos activa",
+    icon: "bi-buildings",
+  },
+  {
+    key: "policies",
+    label: "Politicas del negocio",
+    caption: "Reglas de inventario, ventas y costos",
+    icon: "bi-sliders",
+  },
+  {
+    key: "sales-interface",
+    label: "Interfaz de ventas",
+    caption: "Arquitectura operativa del punto de venta",
+    icon: "bi-window-stack",
+  },
+];
+
+const salesInterfaceOptions = [
+  { code: "ropa", label: "Terminal de Venta Empresarial" },
+  { code: "zapatos", label: "POS Tienda de Zapatos" },
+  { code: "restaurante", label: "POS Restaurante" },
+  { code: "comestibles", label: "POS Comestibles" },
+];
+
+const logoFields = [
+  { key: "logo_login", label: "Logo de login" },
+  { key: "logo_sidebar", label: "Logo del panel principal" },
+  { key: "logo_invoice", label: "Logo de factura" },
+  { key: "logo_favicon", label: "Logo de favicon" },
+];
+
+const policyFields = [
+  { key: "inventory_cs_only", label: "Inventario en Cordobas (C$)", help: "Operacion de inventario usa Cordobas como moneda principal del entorno." },
+  { key: "weighted_inventory_enabled", label: "Ingresos por peso", help: "Habilita libras, kilos y onzas en catalogo e ingresos." },
+  { key: "weighted_sales_enabled", label: "Ventas por peso", help: "Facturacion solicita el peso exacto antes de vender." },
+  { key: "recipe_explosion_on_ingreso", label: "Explosion de recetas pre ingreso", help: "Descarga materias primas automaticamente al ingresar produccion." },
+  { key: "multi_branch_enabled", label: "Multi sucursales", help: "Activa sucursales y bodegas por entorno empresarial." },
+  { key: "price_auto_from_cost_enabled", label: "Auto calcular precio desde costo", help: "Calcula Precio 1 a partir del costo y el margen configurado." },
+];
+
+const currentSection = ref("business");
+const loading = ref(false);
+const environmentLoading = ref(false);
+const error = ref("");
+const success = ref("");
+const environments = ref([]);
+const files = reactive({
+  logo_login: null,
+  logo_sidebar: null,
+  logo_invoice: null,
+  logo_favicon: null,
+});
+const previews = reactive({
+  logo_login: "",
+  logo_sidebar: "",
+  logo_invoice: "",
+  logo_favicon: "",
+});
+const settings = reactive({
+  business_name: "",
+  legal_name: "",
+  trade_name: "",
+  app_title: "",
+  sidebar_subtitle: "",
+  address: "",
+  ruc: "",
+  phone: "",
+  phones: "",
+  email: "",
+  website: "",
+  theme_code: "default",
+  sales_interface_code: "ropa",
+  pricing_currency: "CS",
+  logo_login: "",
+  logo_sidebar: "",
+  logo_invoice: "",
+  logo_favicon: "",
+  inventory_cs_only: false,
+  weighted_inventory_enabled: false,
+  weighted_sales_enabled: false,
+  recipe_explosion_on_ingreso: false,
+  multi_branch_enabled: false,
+  price_auto_from_cost_enabled: false,
+  price_margin_percent: 0,
+});
+const environmentForm = reactive({
+  id: null,
+  company_key: "",
+  company_name: "",
+  database_url: "",
+  activate: false,
+});
+
+const enabledPolicies = computed(
+  () =>
+    policyFields.reduce((total, policy) => total + (settings[policy.key] ? 1 : 0), 0),
+);
+
+function applySettings(payload) {
+  settings.business_name = payload.business_name || "";
+  settings.legal_name = payload.legal_name || "";
+  settings.trade_name = payload.trade_name || payload.business_name || "";
+  settings.app_title = payload.app_title || "";
+  settings.sidebar_subtitle = payload.sidebar_subtitle || "";
+  settings.address = payload.address || "";
+  settings.ruc = payload.ruc || "";
+  settings.phone = payload.phone || "";
+  settings.phones = payload.phones || "";
+  settings.email = payload.email || "";
+  settings.website = payload.website || "";
+  settings.theme_code = payload.theme_code || "default";
+  settings.sales_interface_code = payload.sales_interface_code || "ropa";
+  settings.pricing_currency = payload.pricing_currency || "CS";
+  settings.logo_login = payload.logo_login || "";
+  settings.logo_sidebar = payload.logo_sidebar || "";
+  settings.logo_invoice = payload.logo_invoice || "";
+  settings.logo_favicon = payload.logo_favicon || "";
+  settings.inventory_cs_only = Boolean(payload.inventory_cs_only);
+  settings.weighted_inventory_enabled = Boolean(payload.weighted_inventory_enabled);
+  settings.weighted_sales_enabled = Boolean(payload.weighted_sales_enabled);
+  settings.recipe_explosion_on_ingreso = Boolean(payload.recipe_explosion_on_ingreso);
+  settings.multi_branch_enabled = Boolean(payload.multi_branch_enabled);
+  settings.price_auto_from_cost_enabled = Boolean(payload.price_auto_from_cost_enabled);
+  settings.price_margin_percent = Number(payload.price_margin_percent || 0);
+  environments.value = Array.isArray(payload.environments) ? payload.environments : [];
+}
+
+function previewFor(field) {
+  return previews[field.key] || buildAssetUrl(settings[field.key]);
+}
+
+function onFileChange(key, event) {
+  const [file] = event.target.files || [];
+  files[key] = file || null;
+  previews[key] = file ? URL.createObjectURL(file) : "";
+}
+
+function resetEnvironmentForm() {
+  environmentForm.id = null;
+  environmentForm.company_key = "";
+  environmentForm.company_name = "";
+  environmentForm.database_url = "";
+  environmentForm.activate = false;
+}
+
+function editEnvironment(environment) {
+  environmentForm.id = environment.id;
+  environmentForm.company_key = environment.company_key;
+  environmentForm.company_name = environment.company_name;
+  environmentForm.database_url = environment.database_url;
+  environmentForm.activate = Boolean(environment.is_active);
+  currentSection.value = "environment";
+}
+
+async function loadSettings() {
+  error.value = "";
+  success.value = "";
+
+  try {
+    const payload = await fetchBusinessSettings();
+    applySettings(payload);
+  } catch (err) {
+    error.value = err.message || "No se pudo cargar la configuracion";
+  }
+}
+
+async function loadEnvironments() {
+  try {
+    environments.value = await fetchCompanyEnvironments();
+  } catch (err) {
+    error.value = err.message || "No se pudieron cargar los entornos";
+  }
+}
+
+async function submitSettings() {
+  loading.value = true;
+  error.value = "";
+  success.value = "";
+
+  try {
+    const formData = new FormData();
+    formData.append("business_name", settings.trade_name || settings.business_name || "");
+    formData.append("legal_name", settings.legal_name || "");
+    formData.append("trade_name", settings.trade_name || "");
+    formData.append("app_title", settings.app_title || "");
+    formData.append("sidebar_subtitle", settings.sidebar_subtitle || "");
+    formData.append("address", settings.address || "");
+    formData.append("ruc", settings.ruc || "");
+    formData.append("phone", settings.phone || "");
+    formData.append("phones", settings.phones || "");
+    formData.append("email", settings.email || "");
+    formData.append("website", settings.website || "");
+    formData.append("theme_code", settings.theme_code || "default");
+    formData.append("sales_interface_code", settings.sales_interface_code || "ropa");
+    formData.append("pricing_currency", settings.pricing_currency || "CS");
+    formData.append("inventory_cs_only", String(Boolean(settings.inventory_cs_only)));
+    formData.append("weighted_inventory_enabled", String(Boolean(settings.weighted_inventory_enabled)));
+    formData.append("weighted_sales_enabled", String(Boolean(settings.weighted_sales_enabled)));
+    formData.append("recipe_explosion_on_ingreso", String(Boolean(settings.recipe_explosion_on_ingreso)));
+    formData.append("multi_branch_enabled", String(Boolean(settings.multi_branch_enabled)));
+    formData.append("price_auto_from_cost_enabled", String(Boolean(settings.price_auto_from_cost_enabled)));
+    formData.append("price_margin_percent", String(Number(settings.price_margin_percent || 0)));
+
+    Object.entries(files).forEach(([key, file]) => {
+      if (file) {
+        formData.append(key, file);
+      }
+    });
+
+    await saveBusinessSettings(formData);
+    const persisted = await fetchBusinessSettings();
+    applySettings(persisted);
+    Object.keys(files).forEach((key) => {
+      files[key] = null;
+      previews[key] = "";
+    });
+    success.value =
+      currentSection.value === "policies"
+        ? "Politicas del negocio actualizadas."
+        : "Configuracion empresarial actualizada.";
+    setTimeout(() => {
+      if (success.value) {
+        success.value = "";
+      }
+    }, 3500);
+  } catch (err) {
+    error.value = err.message || "No se pudo guardar la configuracion";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function submitEnvironment() {
+  environmentLoading.value = true;
+  error.value = "";
+  success.value = "";
+
+  try {
+    const formData = new FormData();
+    formData.append("company_key", environmentForm.company_key || "");
+    formData.append("company_name", environmentForm.company_name || "");
+    formData.append("database_url", environmentForm.database_url || "");
+    formData.append("activate", String(Boolean(environmentForm.activate)));
+
+    if (environmentForm.id) {
+      await updateCompanyEnvironment(environmentForm.id, formData);
+      success.value = "Entorno empresarial actualizado.";
+    } else {
+      await createCompanyEnvironment(formData);
+      success.value = "Entorno empresarial registrado.";
+    }
+    setTimeout(() => {
+      if (success.value) {
+        success.value = "";
+      }
+    }, 3500);
+    await loadEnvironments();
+    resetEnvironmentForm();
+  } catch (err) {
+    error.value = err.message || "No se pudo guardar el entorno";
+  } finally {
+    environmentLoading.value = false;
+  }
+}
+
+async function activateEnvironment(environmentId) {
+  error.value = "";
+  success.value = "";
+  try {
+    await activateCompanyEnvironment(environmentId);
+    await loadEnvironments();
+    success.value = "Entorno activo actualizado.";
+    setTimeout(() => {
+      if (success.value) {
+        success.value = "";
+      }
+    }, 3500);
+  } catch (err) {
+    error.value = err.message || "No se pudo activar el entorno";
+  }
+}
+
+onMounted(async () => {
+  await loadSettings();
+  await loadEnvironments();
+});
+</script>

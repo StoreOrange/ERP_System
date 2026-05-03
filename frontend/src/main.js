@@ -1,6 +1,10 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from "./router";
+import PrimeVue from "primevue/config";
+import "./style.css";
+import ErpTheme from "./theme/erpTheme";
+import { applyBusinessBranding, readStoredBusinessSettings } from "./services/settings";
 
 
 
@@ -14,4 +18,18 @@ import "bootstrap-icons/font/bootstrap-icons.css"
 import htmx from "htmx.org";
 window.htmx = htmx;
 
-createApp(App).use(router).mount("#app");
+applyBusinessBranding(readStoredBusinessSettings());
+
+createApp(App)
+  .use(router)
+  .use(PrimeVue, {
+    ripple: true,
+    inputVariant: "filled",
+    theme: {
+      preset: ErpTheme,
+      options: {
+        darkModeSelector: false,
+      },
+    },
+  })
+  .mount("#app");

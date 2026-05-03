@@ -1,81 +1,125 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from pydantic import BaseModel
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-from ..database import SessionLocal
-from ..models.user import User, Role
+from ..core.security import (
+    ALGORITHM,
+    SECRET_KEY,
+    create_access_token,
+    hash_password,
+    verify_password,
+)
+from ..database import get_db
+from ..models.user import User
 from ..schemas.user import UserCreate, UserResponse
-from ..core.security import hash_password, verify_password, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
-# Obtener sesión de DB
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-# ===========================
-#   MODELO PARA LOGIN JSON
-# ===========================
 class LoginData(BaseModel):
     email: str
     password: str
 
 
-# ===========================
-#       REGISTRO
-# ===========================
+def _serialize_user(user: User) -> dict:
+    return {
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "is_active": user.is_active,
+        "roles": [{"id": role.id, "name": role.name} for role in user.roles],
+    }
+
+
+def _get_user_from_token(
+    credentials: HTTPAuthorizationCredentials | None,
+    db: Session,
+) -> User:
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No autenticado",
+        )
+
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        subject = str(payload.get("sub") or "").strip().lower()
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalido",
+        ) from exc
+
+    if not subject:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token invalido",
+        )
+
+    user = db.query(User).filter(func.lower(User.email) == subject).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario no encontrado",
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuario inactivo",
+        )
+    return user
+
+
 @router.post("/register", response_model=UserResponse)
 def register(user: UserCreate, db: Session = Depends(get_db)):
-
-    existing = db.query(User).filter(User.email == user.email).first()
+    existing = db.query(User).filter(func.lower(User.email) == user.email.strip().lower()).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Email ya está registrado")
-
-    hashed = hash_password(user.password)
+        raise HTTPException(status_code=400, detail="Email ya registrado")
 
     new_user = User(
-        email=user.email,
-        full_name=user.full_name,
-        hashed_password=hashed,
+        email=user.email.strip().lower(),
+        full_name=(user.full_name or "").strip() or user.email.strip().lower(),
+        hashed_password=hash_password(user.password),
+        is_active=True,
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-
     return new_user
 
 
-# ===========================
-#           LOGIN
-# ===========================
 @router.post("/login")
 def login(data: LoginData, db: Session = Depends(get_db)):
+    identifier = (data.email or "").strip().lower()
+    password = data.password or ""
 
-    email = data.email
-    password = data.password
-
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(
+        (func.lower(User.email) == identifier)
+        | (func.lower(User.full_name) == identifier)
+    ).first()
 
     if not user:
         raise HTTPException(status_code=400, detail="Usuario no encontrado")
-
     if not verify_password(password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Contraseña incorrecta")
+        raise HTTPException(status_code=401, detail="Contrasena incorrecta")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Usuario inactivo")
 
-    token = create_access_token({"sub": email})
-
+    token = create_access_token({"sub": user.email, "uid": user.id})
     return {
         "access_token": token,
         "token_type": "bearer",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "full_name": user.full_name
-        }
+        "user": _serialize_user(user),
     }
+
+
+@router.get("/me", response_model=UserResponse)
+def me(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+):
+    return _get_user_from_token(credentials, db)
