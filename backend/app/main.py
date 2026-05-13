@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import or_, text
 
@@ -36,6 +37,16 @@ app.mount("/media", StaticFiles(directory=UPLOADS_DIR), name="media")
 @app.get("/")
 def root():
     return {"message": "API ERP lista"}
+
+
+@app.get("/sales", include_in_schema=False)
+def sales_entry():
+    return RedirectResponse(url="http://127.0.0.1:5173/app/sales", status_code=307)
+
+
+@app.get("/sales/", include_in_schema=False)
+def sales_entry_slash():
+    return RedirectResponse(url="http://127.0.0.1:5173/app/sales", status_code=307)
 
 
 def create_initial_admin():

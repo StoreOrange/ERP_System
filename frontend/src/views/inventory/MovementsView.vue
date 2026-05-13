@@ -392,6 +392,7 @@ import Select from "primevue/select";
 import Tag from "primevue/tag";
 
 import { readStoredUser } from "../../services/auth";
+import { readStoredBusinessSettings } from "../../services/settings";
 import {
   createProveedor,
   createEgreso,
@@ -435,11 +436,16 @@ const quickProvider = reactive({
   activo: true,
 });
 const DRAFT_STORAGE_KEY = "erp_inventory_movement_draft_v1";
+const businessSettings = readStoredBusinessSettings() || {};
 
 const baseCurrencySymbol = "C$";
 const selectedCurrencyCode = computed(() => (form.moneda === "USD" ? "USD" : "CS"));
 const selectedCurrencySymbol = computed(() => (form.moneda === "USD" ? "US$" : "C$"));
 const exchangeRate = computed(() => Number(form.tasa_cambio || 0));
+const inventoryCostCurrency = computed(() => {
+  if (businessSettings?.inventory_cs_only) return "CS";
+  return (businessSettings?.pricing_currency || "CS").toUpperCase() === "USD" ? "USD" : "CS";
+});
 const movementTypeOptions = computed(() => (mode.value === "ingreso" ? catalogs.ingreso_tipos : catalogs.egreso_tipos));
 const selectedIngresoType = computed(() => catalogs.ingreso_tipos.find((item) => item.id === form.tipo_id) || null);
 const selectedEgresoType = computed(() => catalogs.egreso_tipos.find((item) => item.id === form.tipo_id) || null);
@@ -632,6 +638,13 @@ function itemEquivalentLabel(item, kind = "subtotal") {
     : `US$ ${formatMoney(equivalent)}`;
 }
 
+function normalizeCostForForm(rawCost) {
+  const cost = Number(rawCost || 0);
+  if (cost <= 0) return 0;
+  if (inventoryCostCurrency.value === form.moneda) return cost;
+  return convertAmount(cost, inventoryCostCurrency.value, form.moneda);
+}
+
 function selectProduct(item) {
   const meta = productMap.value.get(item.id);
   draft.product_id = item.id;
@@ -639,7 +652,7 @@ function selectProduct(item) {
   draft.descripcion = item.descripcion || "";
   draft.existencia = Number(item.existencia || 0);
   draft.cantidad = 1;
-  draft.costo_unitario = Number(meta?.costo_producto || 0);
+  draft.costo_unitario = normalizeCostForForm(meta?.costo_producto || 0);
   searchQuery.value = `${item.cod_producto} - ${item.descripcion}`;
   searchResults.value = [];
   searchActiveIndex.value = -1;
@@ -875,6 +888,25 @@ async function submitMovement() {
     submitting.value = false;
   }
 }
+
+watch(
+  () => form.moneda,
+  (nextCurrency, previousCurrency) => {
+    if (!previousCurrency || previousCurrency === nextCurrency) {
+      return;
+    }
+    if (Number(form.tasa_cambio || 0) <= 0) {
+      return;
+    }
+    items.value = items.value.map((item) => ({
+      ...item,
+      costo_unitario: convertAmount(item.costo_unitario, previousCurrency, nextCurrency),
+    }));
+    if (draft.product_id) {
+      draft.costo_unitario = convertAmount(draft.costo_unitario, previousCurrency, nextCurrency);
+    }
+  },
+);
 
 watch(
   () => [searchQuery.value, form.bodega_id, mode.value],

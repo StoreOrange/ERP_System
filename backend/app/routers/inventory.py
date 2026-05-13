@@ -215,6 +215,44 @@ def _recipe_explosion_on_ingreso_mode(db: Session) -> bool:
     return bool(getattr(row, "recipe_explosion_on_ingreso", False)) if row else False
 
 
+def _get_business_settings(db: Session) -> BusinessSetting | None:
+    return db.query(BusinessSetting).first()
+
+
+def _inventory_cost_currency(settings: BusinessSetting | None) -> str:
+    if settings and bool(getattr(settings, "inventory_cs_only", False)):
+        return "CS"
+    currency = (getattr(settings, "pricing_currency", "CS") or "CS").strip().upper() if settings else "CS"
+    return "USD" if currency == "USD" else "CS"
+
+
+def _cost_pair_from_amount(amount: Decimal, moneda: str, tasa: Decimal) -> tuple[Decimal, Decimal]:
+    value = Decimal(str(amount or 0))
+    if moneda == "USD":
+        return value, value * tasa
+    costo_cs = value
+    costo_usd = costo_cs / tasa if tasa > 0 else Decimal("0")
+    return costo_usd, costo_cs
+
+
+def _product_cost_pair(
+    producto: Producto,
+    tasa: Decimal,
+    settings: BusinessSetting | None,
+) -> tuple[Decimal, Decimal]:
+    stored_cost = Decimal(str(producto.costo_producto or 0))
+    return _cost_pair_from_amount(stored_cost, _inventory_cost_currency(settings), tasa)
+
+
+def _assign_product_cost(
+    producto: Producto,
+    costo_usd: Decimal,
+    costo_cs: Decimal,
+    settings: BusinessSetting | None,
+) -> None:
+    producto.costo_producto = costo_usd if _inventory_cost_currency(settings) == "USD" else costo_cs
+
+
 def _normalize_product_type(value: str | None) -> str:
     normalized = (value or "DIRECTO").strip().upper()
     return "RECETA" if normalized == "RECETA" else "DIRECTO"
@@ -639,6 +677,7 @@ def get_product_balances(product_id: int, db: Session = Depends(get_db)):
 
 @router.post("/products", response_model=ProductoResponse, status_code=status.HTTP_201_CREATED)
 def create_product(payload: ProductoCreate, db: Session = Depends(get_db)):
+    settings = _get_business_settings(db)
     code = _next_product_code(db)
     _ensure_catalog_refs(
         db,
@@ -684,7 +723,9 @@ def create_product(payload: ProductoCreate, db: Session = Depends(get_db)):
             db.add(ingreso_tipo)
             db.flush()
 
-        total_cs = existencia_inicial * Decimal(producto.costo_producto or 0)
+        costo_unitario_usd, costo_unitario_cs = _product_cost_pair(producto, Decimal("0"), settings)
+        total_usd = existencia_inicial * costo_unitario_usd
+        total_cs = existencia_inicial * costo_unitario_cs
         ingreso = IngresoInventario(
             tipo_id=ingreso_tipo.id,
             bodega_id=payload.bodega_inicial_id,
@@ -695,7 +736,7 @@ def create_product(payload: ProductoCreate, db: Session = Depends(get_db)):
             tasa_cambio=None,
             observacion=f"Inventario inicial de producto {producto.cod_producto}",
             usuario_registro=payload.usuario_registro,
-            total_usd=Decimal("0"),
+            total_usd=total_usd,
             total_cs=total_cs,
         )
         db.add(ingreso)
@@ -705,9 +746,9 @@ def create_product(payload: ProductoCreate, db: Session = Depends(get_db)):
                 ingreso_id=ingreso.id,
                 producto_id=producto.id,
                 cantidad=existencia_inicial,
-                costo_unitario_usd=Decimal("0"),
-                costo_unitario_cs=Decimal(producto.costo_producto or 0),
-                subtotal_usd=Decimal("0"),
+                costo_unitario_usd=costo_unitario_usd,
+                costo_unitario_cs=costo_unitario_cs,
+                subtotal_usd=total_usd,
                 subtotal_cs=total_cs,
             )
         )
@@ -890,6 +931,7 @@ def save_product_recipe(product_id: int, payload: ProductoRecetaSaveRequest, db:
 
 @router.post("/producciones/open", response_model=ProduccionInventarioResponse, status_code=status.HTTP_201_CREATED)
 def open_production(payload: ProduccionInventarioCreate, db: Session = Depends(get_db)):
+    settings = _get_business_settings(db)
     producto = (
         db.query(Producto)
         .options(
@@ -936,11 +978,7 @@ def open_production(payload: ProduccionInventarioCreate, db: Session = Depends(g
     for ingredient_id, requirement in requirements.items():
         producto_req = requirement["producto"]
         cantidad = Decimal(str(requirement["cantidad"] or 0))
-        costo_cs = Decimal(str(producto_req.costo_producto or 0))
-        costo_usd = costo_cs / tasa if (moneda == "CS" and tasa > 0) else (costo_cs if moneda == "USD" else Decimal("0"))
-        if moneda == "USD":
-            costo_usd = Decimal(str(producto_req.costo_producto or 0))
-            costo_cs = costo_usd * tasa
+        costo_usd, costo_cs = _product_cost_pair(producto_req, tasa, settings)
         subtotal_cs = cantidad * costo_cs
         subtotal_usd = cantidad * costo_usd
         total_insumos_cs += subtotal_cs
@@ -991,6 +1029,7 @@ def open_production(payload: ProduccionInventarioCreate, db: Session = Depends(g
 
 @router.post("/producciones/{production_id}/execute", response_model=ProduccionInventarioResponse)
 def execute_production(production_id: int, db: Session = Depends(get_db)):
+    settings = _get_business_settings(db)
     produccion = (
         db.query(ProduccionInventario)
         .options(
@@ -1083,7 +1122,12 @@ def execute_production(production_id: int, db: Session = Depends(get_db)):
 
     producto_final = db.query(Producto).filter(Producto.id == produccion.producto_final_id).first()
     if producto_final:
-        producto_final.costo_producto = Decimal(str(final_line.costo_unitario_cs or 0))
+        _assign_product_cost(
+            producto_final,
+            Decimal(str(final_line.costo_unitario_usd or 0)),
+            Decimal(str(final_line.costo_unitario_cs or 0)),
+            settings,
+        )
 
     produccion.egreso_id = egreso.id
     produccion.ingreso_id = ingreso.id
@@ -1139,6 +1183,7 @@ def get_production_report(production_id: int, db: Session = Depends(get_db)):
 
 @router.post("/ingresos", response_model=IngresoResponse, status_code=status.HTTP_201_CREATED)
 def create_ingreso(payload: IngresoCreate, db: Session = Depends(get_db)):
+    settings = _get_business_settings(db)
     if not payload.items:
         raise HTTPException(status_code=400, detail="Debes registrar al menos un item")
 
@@ -1207,7 +1252,7 @@ def create_ingreso(payload: IngresoCreate, db: Session = Depends(get_db)):
         )
 
         _get_or_create_saldo(db, producto.id)
-        producto.costo_producto = costo_cs
+        _assign_product_cost(producto, costo_usd, costo_cs, settings)
 
     ingreso.total_usd = total_usd
     ingreso.total_cs = total_cs
@@ -1246,8 +1291,7 @@ def create_ingreso(payload: IngresoCreate, db: Session = Depends(get_db)):
             for ingredient_id, requirement in recipe_requirements.items():
                 producto_req = requirement["producto"]
                 required_qty = Decimal(str(requirement["cantidad"] or 0))
-                cost_cs = Decimal(str(producto_req.costo_producto or 0))
-                cost_usd = cost_cs / tasa if tasa > 0 else Decimal("0")
+                cost_usd, cost_cs = _product_cost_pair(producto_req, tasa, settings)
                 subtotal_cs = cost_cs * required_qty
                 subtotal_usd = cost_usd * required_qty
                 db.add(
@@ -1286,6 +1330,7 @@ def list_ingresos(db: Session = Depends(get_db)):
 
 @router.post("/egresos", response_model=EgresoResponse, status_code=status.HTTP_201_CREATED)
 def create_egreso(payload: EgresoCreate, db: Session = Depends(get_db)):
+    settings = _get_business_settings(db)
     if not payload.items:
         raise HTTPException(status_code=400, detail="Debes registrar al menos un item")
 
@@ -1317,6 +1362,7 @@ def create_egreso(payload: EgresoCreate, db: Session = Depends(get_db)):
 
     total_usd = Decimal("0")
     total_cs = Decimal("0")
+    resolved_items: list[dict[str, Decimal | int]] = []
 
     for item in payload.items:
         producto = db.query(Producto).options(joinedload(Producto.saldo)).filter(Producto.id == item.producto_id).first()
@@ -1338,18 +1384,25 @@ def create_egreso(payload: EgresoCreate, db: Session = Depends(get_db)):
                 detail=f"Stock insuficiente para {producto.cod_producto}. Disponible: {existencia_actual}",
             )
 
-        base_cost_cs = Decimal(item.costo_unitario) if item.costo_unitario is not None else Decimal(producto.costo_producto or 0)
-        if moneda == "USD":
-            costo_usd = base_cost_cs if item.costo_unitario is not None else (base_cost_cs / tasa if tasa > 0 else Decimal("0"))
-            costo_cs = costo_usd * tasa
+        if item.costo_unitario is not None:
+            costo_usd, costo_cs = _cost_pair_from_amount(Decimal(item.costo_unitario), moneda, tasa)
         else:
-            costo_cs = base_cost_cs
-            costo_usd = costo_cs / tasa if tasa > 0 else Decimal("0")
+            costo_usd, costo_cs = _product_cost_pair(producto, tasa, settings)
 
         subtotal_usd = cantidad * costo_usd
         subtotal_cs = cantidad * costo_cs
         total_usd += subtotal_usd
         total_cs += subtotal_cs
+        resolved_items.append(
+            {
+                "producto_id": int(producto.id),
+                "cantidad": cantidad,
+                "costo_unitario_usd": costo_usd,
+                "costo_unitario_cs": costo_cs,
+                "subtotal_usd": subtotal_usd,
+                "subtotal_cs": subtotal_cs,
+            }
+        )
 
         db.add(
             EgresoItem(
@@ -1385,22 +1438,16 @@ def create_egreso(payload: EgresoCreate, db: Session = Depends(get_db)):
         )
         db.add(ingreso_destino)
         db.flush()
-        for item in payload.items:
-            producto = db.query(Producto).filter(Producto.id == item.producto_id).first()
-            base_cost_cs = Decimal(item.costo_unitario) if item.costo_unitario is not None else Decimal(producto.costo_producto or 0)
-            costo_cs = base_cost_cs
-            costo_usd = costo_cs / tasa if tasa and tasa > 0 else Decimal("0")
-            subtotal_cs = Decimal(item.cantidad) * costo_cs
-            subtotal_usd = Decimal(item.cantidad) * costo_usd
+        for item_data in resolved_items:
             db.add(
                 IngresoItem(
                     ingreso_id=ingreso_destino.id,
-                    producto_id=item.producto_id,
-                    cantidad=item.cantidad,
-                    costo_unitario_usd=costo_usd,
-                    costo_unitario_cs=costo_cs,
-                    subtotal_usd=subtotal_usd,
-                    subtotal_cs=subtotal_cs,
+                    producto_id=int(item_data["producto_id"]),
+                    cantidad=item_data["cantidad"],
+                    costo_unitario_usd=item_data["costo_unitario_usd"],
+                    costo_unitario_cs=item_data["costo_unitario_cs"],
+                    subtotal_usd=item_data["subtotal_usd"],
+                    subtotal_cs=item_data["subtotal_cs"],
                 )
             )
     for item in payload.items:
