@@ -1,4 +1,5 @@
 from logging.config import fileConfig
+import os
 import sys
 from pathlib import Path
 
@@ -9,18 +10,28 @@ from alembic import context
 
 # === CORRECCIÓN CRÍTICA ===
 # Agregamos el directorio raíz al sys.path
-BASE_DIR = Path(__file__).resolve().parents[2]
-sys.path.append(str(BASE_DIR))
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+sys.path.append(str(BACKEND_DIR))
+sys.path.append(str(PROJECT_DIR))
 
 # Ahora sí se puede importar correctamente Base
-from backend.app.database import Base
-from backend.app import models
+try:
+    from app.database import Base
+    from app import models
+except ModuleNotFoundError:
+    from backend.app.database import Base
+    from backend.app import models
 # Usamos la metadata REAL
 target_metadata = Base.metadata
 
 
 # Alembic Config
 config = context.config
+config.set_main_option(
+    "sqlalchemy.url",
+    os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url")),
+)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

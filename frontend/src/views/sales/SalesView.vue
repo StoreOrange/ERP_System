@@ -61,7 +61,7 @@
     <form class="sales-shell" @submit.prevent>
       <div class="sales-grid">
         <div class="sales-main-column">
-          <section class="panel-card sales-card">
+          <section class="panel-card sales-card sales-ticket-card">
             <div class="sales-card-head">
               <div>
                 <span class="products-section-kicker">Facturacion virtual</span>
@@ -161,9 +161,9 @@
           <section class="panel-card sales-card">
             <div class="sales-card-head">
               <div>
-                <span class="products-section-kicker">Datos de venta</span>
-                <h3>Cliente, vendedor y fecha</h3>
-                <p>Estructura comercial base del entorno HollywoodPacas.</p>
+                <span class="products-section-kicker">Datos comerciales</span>
+                <h3>Informacion de la factura</h3>
+                <p>Configura cliente, vendedor y condiciones antes de registrar.</p>
               </div>
             </div>
 
@@ -179,24 +179,38 @@
                       variant="outlined"
                       size="small"
                       icon="bi bi-search"
+                      label="Buscar cliente"
                       @click="customerDialog = true"
-                    >
-                      Buscar cliente
-                    </Button>
-                    <span class="sales-party-label">Seleccionado:</span>
-                    <strong class="sales-party-value">{{ saleForm.customer_name || "Consumidor final" }}</strong>
+                    />
+                    <div class="sales-party-selection">
+                      <span class="sales-party-label">Seleccionado:</span>
+                      <strong class="sales-party-value">{{ saleForm.customer_name || "Consumidor final" }}</strong>
+                    </div>
                     <Button
+                      class="sales-default-customer"
                       type="button"
                       severity="secondary"
                       variant="text"
                       size="small"
                       icon="bi bi-person-check"
+                      label="Consumidor final"
+                      aria-label="Usar consumidor final"
+                      title="Usar consumidor final"
                       @click="setDefaultCustomer"
+                    />
+                    <Button
+                      type="button"
+                      severity="secondary"
+                      variant="outlined"
+                      size="small"
+                      icon="bi bi-person-plus"
+                      :label="showCustomerCreate ? 'Cerrar' : 'Nuevo cliente'"
+                      @click="showCustomerCreate = !showCustomerCreate"
                     />
                   </div>
                 </label>
 
-                <div class="sales-inline-create">
+                <div v-if="showCustomerCreate" class="sales-inline-create">
                   <div class="sales-inline-create-title">Nuevo cliente</div>
                   <div class="sales-customer-editor">
                     <input v-model="customerDraft.nombre" class="form-control" placeholder="Nombre del cliente *" />
@@ -205,9 +219,7 @@
                     <input v-model="customerDraft.direccion" class="form-control sales-address-field" placeholder="Direccion" />
                   </div>
                   <div class="sales-inline-create-actions">
-                    <Button type="button" icon="bi bi-person-plus" @click="saveCustomer">
-                      Guardar cliente
-                    </Button>
+                    <Button type="button" icon="bi bi-person-plus" label="Guardar cliente" @click="saveCustomer" />
                   </div>
                 </div>
               </div>
@@ -262,34 +274,22 @@
                   :filter-fields="['name', 'code']"
                 />
               </label>
-            </div>
-            </div>
-          </section>
 
-          <section class="panel-card sales-card">
-            <div class="sales-card-head">
-              <div>
-                <span class="products-section-kicker">Observacion</span>
-                <h3>Detalle comercial</h3>
-              </div>
+              <label class="field-group sales-form-span-4">
+                <span>Observacion</span>
+                <input
+                  v-model="saleForm.observacion"
+                  class="form-control"
+                  placeholder="Agrega una nota comercial opcional"
+                />
+              </label>
             </div>
-
-            <div class="sales-card-body">
-            <input
-              v-model="saleForm.observacion"
-              class="form-control"
-              placeholder="Detalle o nota de venta"
-            />
             </div>
           </section>
 
           <div class="sales-footer-actions">
-            <Button type="button" severity="secondary" variant="outlined" @click="clearSale">
-              Limpiar venta
-            </Button>
-            <Button type="button" icon="bi bi-check2-circle" @click="openPaymentDialog">
-              Registrar venta
-            </Button>
+            <Button type="button" severity="secondary" variant="outlined" icon="bi bi-arrow-counterclockwise" label="Limpiar venta" @click="clearSale" />
+            <Button type="button" icon="bi bi-check2-circle" label="Registrar venta" @click="openPaymentDialog" />
           </div>
         </div>
 
@@ -300,9 +300,7 @@
                 <div class="sales-search-titlebar">
                   <h3>Catalogo de productos</h3>
                   <div class="sales-search-title-actions">
-                    <Button type="button" severity="secondary" variant="outlined" size="small" icon="bi bi-boxes">
-                      Combos
-                    </Button>
+                    <Button type="button" severity="secondary" variant="outlined" size="small" icon="bi bi-boxes" label="Combos" />
                   </div>
                 </div>
 
@@ -363,7 +361,7 @@
                     <strong>{{ item.descripcion }}</strong>
                     <span>
                       {{ item.cod_producto }}
-                      <template v-if="item.codigo_barra"> · {{ item.codigo_barra }}</template>
+                      <template v-if="item.codigo_barra"> &middot; {{ item.codigo_barra }}</template>
                     </span>
                   </div>
 
@@ -508,12 +506,8 @@
           </div>
 
           <div v-if="saleForm.condition !== 'CREDITO'" class="sales-payment-actions">
-            <Button type="button" severity="secondary" variant="outlined" icon="bi bi-calculator" @click="fillRemainingAmount">
-              Completar saldo
-            </Button>
-            <Button type="button" icon="bi bi-plus-lg" @click="addPayment">
-              Agregar pago
-            </Button>
+            <Button type="button" severity="secondary" variant="outlined" icon="bi bi-calculator" label="Completar saldo" @click="fillRemainingAmount" />
+            <Button type="button" icon="bi bi-plus-lg" label="Agregar pago" @click="addPayment" />
           </div>
 
           <div class="sales-payments-list">
@@ -530,7 +524,7 @@
               <article v-for="payment in payments" :key="payment.id" class="sales-payment-row">
                 <div class="sales-payment-copy">
                   <strong>{{ payment.forma_label }}</strong>
-                  <span>{{ payment.moneda }} · {{ payment.bank_label || "Sin banco" }}</span>
+                  <span>{{ payment.moneda }} &middot; {{ payment.bank_label || "Sin banco" }}</span>
                 </div>
 
                 <div class="sales-payment-amount">
@@ -553,12 +547,8 @@
 
       <template #footer>
         <div class="sales-payment-footer">
-          <Button type="button" severity="secondary" variant="outlined" @click="paymentDialog = false">
-            Cancelar
-          </Button>
-          <Button type="button" icon="bi bi-check2-circle" @click="confirmSale">
-            Confirmar y registrar factura
-          </Button>
+          <Button type="button" severity="secondary" variant="outlined" label="Cancelar" @click="paymentDialog = false" />
+          <Button type="button" icon="bi bi-check2-circle" label="Confirmar y registrar factura" @click="confirmSale" />
         </div>
       </template>
     </Dialog>
@@ -607,12 +597,8 @@
           <input v-model="vendorDraft.nombre" class="form-control" placeholder="Nombre del vendedor *" />
         </label>
         <div class="sales-payment-footer">
-          <Button type="button" severity="secondary" variant="outlined" @click="vendorDialog = false">
-            Cancelar
-          </Button>
-          <Button type="button" icon="bi bi-person-plus" @click="saveVendor">
-            Guardar vendedor
-          </Button>
+          <Button type="button" severity="secondary" variant="outlined" label="Cancelar" @click="vendorDialog = false" />
+          <Button type="button" icon="bi bi-person-plus" label="Guardar vendedor" @click="saveVendor" />
         </div>
       </div>
     </Dialog>
@@ -637,6 +623,7 @@ const paymentDialog = ref(false);
 const customerDialog = ref(false);
 const vendorDialog = ref(false);
 const searchingProducts = ref(false);
+const showCustomerCreate = ref(false);
 const searchQuery = ref("");
 const searchResults = ref([]);
 const searchActiveIndex = ref(-1);
@@ -959,6 +946,7 @@ function saveCustomer() {
   customerDraft.telefono = "";
   customerDraft.identificacion = "";
   customerDraft.direccion = "";
+  showCustomerCreate.value = false;
   showAlert("success", "Cliente agregado al flujo de venta.");
 }
 

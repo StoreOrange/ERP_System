@@ -17,6 +17,7 @@ frontend/.env.development.local
 
 # Local runtime files
 .dev/
+.env
 *.log
 backend/uploads/
 

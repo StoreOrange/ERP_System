@@ -6,6 +6,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import or_, text
 
+from .config import settings as app_settings
 from .core.security import hash_password
 from .database import Base, SessionLocal, engine
 from .models.inventory import Bodega, EgresoTipo, IngresoTipo, Linea, Marca, Producto, Proveedor, Segmento, UnidadMedida
@@ -41,12 +42,12 @@ def root():
 
 @app.get("/sales", include_in_schema=False)
 def sales_entry():
-    return RedirectResponse(url="http://127.0.0.1:5173/app/sales", status_code=307)
+    return RedirectResponse(url=f"{app_settings.FRONTEND_URL}/app/sales", status_code=307)
 
 
 @app.get("/sales/", include_in_schema=False)
 def sales_entry_slash():
-    return RedirectResponse(url="http://127.0.0.1:5173/app/sales", status_code=307)
+    return RedirectResponse(url=f"{app_settings.FRONTEND_URL}/app/sales", status_code=307)
 
 
 def create_initial_admin():
