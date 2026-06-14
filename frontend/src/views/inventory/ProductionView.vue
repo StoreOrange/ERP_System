@@ -132,11 +132,14 @@
               <span class="products-section-kicker">Informe</span>
               <h3>Orden #{{ selectedReport.id }}</h3>
               <p>
-                {{ selectedReport.producto_final?.cod_producto }} ·
+                {{ selectedReport.producto_final?.cod_producto }} /
                 {{ selectedReport.producto_final?.descripcion }}
               </p>
             </div>
-            <Tag :severity="selectedReport.estado === 'FINALIZADA' ? 'success' : 'warn'" :value="selectedReport.estado" />
+            <div class="enterprise-table-actions">
+              <Tag :severity="selectedReport.estado === 'FINALIZADA' ? 'success' : 'warn'" :value="selectedReport.estado" />
+              <Button type="button" icon="bi bi-file-earmark-excel" label="Exportar" severity="secondary" variant="outlined" size="small" @click="exportProductionLines" />
+            </div>
           </div>
 
           <div class="movement-totals">
@@ -154,9 +157,22 @@
             </div>
           </div>
 
-          <DataTable :value="selectedReport.lineas || []" class="movements-table" responsive-layout="scroll" size="small">
-            <Column field="tipo_linea" header="Tipo" />
-            <Column header="Producto">
+          <DataTable
+            ref="productionLinesTable"
+            :value="selectedReport.lineas || []"
+            class="movements-table"
+            responsive-layout="scroll"
+            scrollable
+            scroll-height="320px"
+            resizable-columns
+            column-resize-mode="fit"
+            removable-sort
+            striped-rows
+            export-filename="detalle-produccion"
+            size="small"
+          >
+            <Column field="tipo_linea" header="Tipo" sortable />
+            <Column field="producto.descripcion" header="Producto" sortable>
               <template #body="{ data }">
                 <div class="products-main-cell">
                   <strong>{{ data.producto?.descripcion || `#${data.producto_id}` }}</strong>
@@ -164,13 +180,13 @@
                 </div>
               </template>
             </Column>
-            <Column header="Cantidad">
+            <Column field="cantidad" header="Cantidad" sortable>
               <template #body="{ data }">{{ formatQty(data.cantidad) }}</template>
             </Column>
-            <Column header="Costo C$">
+            <Column field="costo_unitario_cs" header="Costo C$" sortable>
               <template #body="{ data }">C$ {{ formatMoney(data.costo_unitario_cs) }}</template>
             </Column>
-            <Column header="Subtotal C$">
+            <Column field="subtotal_cs" header="Subtotal C$" sortable>
               <template #body="{ data }">C$ {{ formatMoney(data.subtotal_cs) }}</template>
             </Column>
           </DataTable>
@@ -184,21 +200,40 @@
             <h3>Producciones registradas</h3>
             <p>Desde aqui ejecutas la orden y revisas el detalle completo del consumo y del ingreso final.</p>
           </div>
+          <Button type="button" icon="bi bi-file-earmark-excel" label="Exportar" severity="secondary" variant="outlined" size="small" @click="exportProductions" />
         </div>
 
-        <DataTable :value="productions" class="movements-table movement-history-table" paginator :rows="10" responsive-layout="scroll" size="small">
-          <Column header="Orden">
+        <DataTable
+          ref="productionTable"
+          :value="productions"
+          class="movements-table movement-history-table"
+          paginator
+          :rows="10"
+          :rows-per-page-options="[10, 20, 50]"
+          paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+          current-page-report-template="{first}-{last} de {totalRecords}"
+          responsive-layout="scroll"
+          scrollable
+          scroll-height="520px"
+          resizable-columns
+          column-resize-mode="fit"
+          removable-sort
+          striped-rows
+          export-filename="producciones"
+          size="small"
+        >
+          <Column field="id" header="Orden" sortable>
             <template #body="{ data }">PRD-{{ data.id }}</template>
           </Column>
-          <Column header="Fecha">
+          <Column field="fecha" header="Fecha" sortable>
             <template #body="{ data }">{{ data.fecha }}</template>
           </Column>
-          <Column header="Estado">
+          <Column field="estado" header="Estado" sortable>
             <template #body="{ data }">
               <Tag :severity="data.estado === 'FINALIZADA' ? 'success' : 'warn'" :value="data.estado" rounded />
             </template>
           </Column>
-          <Column header="Producto">
+          <Column field="producto_final.descripcion" header="Producto" sortable>
             <template #body="{ data }">
               <div class="products-main-cell">
                 <strong>{{ data.producto_final?.descripcion || "-" }}</strong>
@@ -206,13 +241,13 @@
               </div>
             </template>
           </Column>
-          <Column header="Cantidad">
+          <Column field="cantidad_producida" header="Cantidad" sortable>
             <template #body="{ data }">{{ formatQty(data.cantidad_producida) }}</template>
           </Column>
-          <Column header="Total C$">
+          <Column field="total_produccion_cs" header="Total C$" sortable>
             <template #body="{ data }">C$ {{ formatMoney(data.total_produccion_cs) }}</template>
           </Column>
-          <Column header="Acciones">
+          <Column header="Acciones" frozen align-frozen="right">
             <template #body="{ data }">
               <div class="products-actions-cell">
                 <Button type="button" icon="bi bi-eye" severity="secondary" variant="text" rounded @click="viewReport(data.id)" />
@@ -252,6 +287,7 @@ import {
   fetchProducts,
   openProduction,
 } from "../../services/inventory";
+import { fetchCurrentExchangeRate } from "../../services/settings";
 
 const currentUser = readStoredUser();
 const submitting = ref(false);
@@ -260,6 +296,8 @@ const successMessage = ref("");
 const products = ref([]);
 const productions = ref([]);
 const selectedReport = ref(null);
+const productionTable = ref(null);
+const productionLinesTable = ref(null);
 const catalogs = reactive({ bodegas: [] });
 const form = reactive(getEmptyForm());
 
@@ -286,6 +324,7 @@ function resetForm() {
   Object.assign(form, getEmptyForm());
   formError.value = "";
   successMessage.value = "";
+  void applyCurrentExchangeRate();
 }
 
 function formatMoney(value) {
@@ -299,6 +338,14 @@ function formatQty(value) {
   return Number(value || 0).toFixed(2);
 }
 
+function exportProductions() {
+  productionTable.value?.exportCSV();
+}
+
+function exportProductionLines() {
+  productionLinesTable.value?.exportCSV();
+}
+
 async function loadData() {
   const [catalogData, productData, productionData] = await Promise.all([
     fetchInventoryCatalogs(),
@@ -308,6 +355,18 @@ async function loadData() {
   catalogs.bodegas = catalogData.bodegas || [];
   products.value = productData || [];
   productions.value = productionData || [];
+}
+
+async function applyCurrentExchangeRate() {
+  if (Number(form.tasa_cambio || 0) > 0) return;
+  try {
+    const currentRate = await fetchCurrentExchangeRate();
+    if (currentRate?.rate) {
+      form.tasa_cambio = Number(currentRate.rate);
+    }
+  } catch {
+    form.tasa_cambio = form.tasa_cambio || null;
+  }
 }
 
 async function submitProduction() {
@@ -356,6 +415,7 @@ async function viewReport(productionId) {
 onMounted(async () => {
   try {
     await loadData();
+    await applyCurrentExchangeRate();
   } catch (error) {
     formError.value = error.message || "No se pudo cargar el modulo de produccion.";
   }

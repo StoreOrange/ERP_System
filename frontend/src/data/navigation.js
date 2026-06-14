@@ -20,9 +20,9 @@ export const appNavigation = [
     route: "/app/inventory/movements",
   },
   {
-    label: "Produccion",
-    icon: "bi-diagram-3",
-    route: "/app/inventory/production",
+    label: "Apertura de Pacas",
+    icon: "bi-box-arrow-in-down",
+    route: "/app/inventory/paca-opening",
   },
   {
     label: "Ventas",

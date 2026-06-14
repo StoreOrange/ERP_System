@@ -16,6 +16,8 @@ from .inventory import (
     MarcaCreate,
     MarcaResponse,
     MarcaUpdate,
+    PacaAperturaCreate,
+    PacaAperturaResponse,
     ProductBodegaBalanceResponse,
     ProductSearchItemResponse,
     ProductSearchResponse,
@@ -30,3 +32,17 @@ from .inventory import (
     UnidadMedidaResponse,
 )
 from .settings import BusinessSettingResponse, CompanyEnvironmentResponse
+from .user import (
+    BranchCreate,
+    BranchResponse,
+    BranchUpdate,
+    UserAccessProfileCreate,
+    UserAccessProfileResponse,
+    UserAccessProfileUpdate,
+    UserCreate,
+    UserResponse,
+    UserUpdate,
+    VendorCreate,
+    VendorResponse,
+    VendorUpdate,
+)

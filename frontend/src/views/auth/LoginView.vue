@@ -35,7 +35,7 @@
       </div>
 
       <div class="auth-hero-copy">
-        <p class="auth-kicker"><span></span> ERP empresarial</p>
+        <p class="auth-kicker"><span></span> Sistema empresarial</p>
         <h1>Control total para hacer crecer tu negocio.</h1>
         <p class="auth-copy">
           Centraliza operaciones, inventario y ventas en una plataforma disenada para
@@ -74,35 +74,56 @@
 
     <div class="auth-card">
       <div class="auth-card-glow"></div>
-      <div v-if="branding.logo_login" class="auth-logo-wrap">
-        <img :src="buildAssetUrl(branding.logo_login)" :alt="businessLabel || 'Logo negocio'" />
+      <div class="auth-card-brand">
+        <div v-if="branding.logo_login" class="auth-logo-wrap">
+          <img :src="buildAssetUrl(branding.logo_login)" :alt="businessLabel || 'Logo negocio'" />
+        </div>
+        <div v-else class="auth-logo-fallback">
+          <i class="bi bi-buildings"></i>
+        </div>
+        <div>
+          <span>Sistema empresarial</span>
+          <strong>{{ businessLabel || "Orange Tec" }}</strong>
+        </div>
       </div>
 
       <div class="auth-card-header">
         <p class="auth-card-eyebrow">Acceso seguro</p>
-        <h2>Iniciar sesion</h2>
-        <p>Ingresa a {{ businessLabel || "tu entorno empresarial" }} y continua gestionando tu operacion.</p>
+        <h2>Bienvenido</h2>
+        <p>Ingresa tus credenciales para continuar con la gestion del negocio.</p>
       </div>
 
       <form class="auth-form" @submit.prevent="login">
         <label class="field-group">
           <span>Usuario o correo</span>
-          <InputText v-model="email" class="form-control" placeholder="administrador" />
+          <IconField class="auth-input-shell">
+            <InputIcon class="bi bi-person" />
+            <InputText v-model="email" class="form-control" placeholder="administrador" autocomplete="username" />
+          </IconField>
         </label>
 
         <label class="field-group">
           <span>Contrasena</span>
-          <Password
-            v-model="password"
-            class="form-control"
-            placeholder="020416"
-            :feedback="false"
-            toggle-mask
-          />
+          <IconField class="auth-input-shell">
+            <InputIcon class="bi bi-shield-lock" />
+            <Password
+              v-model="password"
+              class="form-control"
+              placeholder="Ingresa tu contrasena"
+              :feedback="false"
+              toggle-mask
+              autocomplete="current-password"
+            />
+          </IconField>
         </label>
 
+        <div class="auth-form-meta">
+          <span><i class="bi bi-clock-history"></i> Sesion extendida</span>
+          <span><i class="bi bi-lock"></i> Acceso privado</span>
+        </div>
+
         <Button class="auth-submit" :disabled="loading" type="submit" fluid>
-          <span>{{ loading ? "Ingresando..." : "Entrar al ERP" }}</span>
+          <span>{{ loading ? "Ingresando..." : "Entrar al sistema" }}</span>
           <i v-if="!loading" class="pi pi-arrow-right"></i>
         </Button>
 
@@ -111,7 +132,7 @@
 
       <div class="auth-card-footer">
         <span><i class="pi pi-lock"></i> Conexion protegida</span>
-        <strong>Orange Tec ERP</strong>
+        <strong>Orange Tec Sistema empresarial</strong>
       </div>
     </div>
   </div>
@@ -121,6 +142,8 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import Button from "primevue/button";
+import IconField from "primevue/iconfield";
+import InputIcon from "primevue/inputicon";
 import InputText from "primevue/inputtext";
 import Password from "primevue/password";
 

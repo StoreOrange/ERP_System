@@ -32,6 +32,39 @@ def _serialize_user(user: User) -> dict:
         "full_name": user.full_name,
         "is_active": user.is_active,
         "roles": [{"id": role.id, "name": role.name} for role in user.roles],
+        "access_profiles": [
+            {
+                "id": profile.id,
+                "user_id": profile.user_id,
+                "sucursal_id": profile.sucursal_id,
+                "sucursal_name": profile.sucursal.name if profile.sucursal else None,
+                "bodega_id": profile.bodega_id,
+                "bodega_name": profile.bodega.name if profile.bodega else None,
+                "role_scope": profile.role_scope,
+                "can_sell": bool(profile.can_sell),
+                "can_move_inventory": bool(profile.can_move_inventory),
+                "can_manage_catalogs": bool(profile.can_manage_catalogs),
+                "is_default": bool(profile.is_default),
+                "activo": bool(profile.activo),
+            }
+            for profile in user.access_profiles
+        ],
+        "vendor_profile": {
+            "id": user.vendor_profile.id,
+            "code": user.vendor_profile.code,
+            "nombre": user.vendor_profile.nombre,
+            "user_id": user.vendor_profile.user_id,
+            "sucursal_id": user.vendor_profile.sucursal_id,
+            "sucursal_name": user.vendor_profile.sucursal.name if user.vendor_profile.sucursal else None,
+            "bodega_id": user.vendor_profile.bodega_id,
+            "bodega_name": user.vendor_profile.bodega.name if user.vendor_profile.bodega else None,
+            "telefono": user.vendor_profile.telefono,
+            "email": user.vendor_profile.email,
+            "meta_ventas": user.vendor_profile.meta_ventas,
+            "activo": bool(user.vendor_profile.activo),
+        }
+        if user.vendor_profile
+        else None,
     }
 
 
@@ -122,4 +155,4 @@ def me(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ):
-    return _get_user_from_token(credentials, db)
+    return _serialize_user(_get_user_from_token(credentials, db))

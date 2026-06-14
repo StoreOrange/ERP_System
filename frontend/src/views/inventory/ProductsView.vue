@@ -115,6 +115,15 @@
               <span class="products-section-kicker">Operacion diaria</span>
               <h3>Listado de productos</h3>
             </div>
+            <Button
+              type="button"
+              icon="bi bi-file-earmark-excel"
+              label="Exportar"
+              severity="secondary"
+              variant="outlined"
+              size="small"
+              @click="exportProductsTable"
+            />
           </div>
         </template>
         <template #content>
@@ -122,52 +131,65 @@
           <div v-else-if="error" class="empty-state error">{{ error }}</div>
           <DataTable
             v-else
+            ref="productTable"
+            v-model:filters="productTableFilters"
             :value="filteredProducts"
+            :global-filter-fields="['cod_producto', 'codigo_barra', 'descripcion', 'linea.linea', 'segmento.segmento']"
             paginator
             :rows="10"
+            :rows-per-page-options="[10, 20, 50, 100]"
+            paginator-template="FirstPageLink PrevPageLink PageLinks NextPageLink LastPageLink RowsPerPageDropdown CurrentPageReport"
+            current-page-report-template="{first}-{last} de {totalRecords}"
             responsive-layout="scroll"
+            scrollable
+            scroll-height="520px"
+            resizable-columns
+            column-resize-mode="fit"
+            removable-sort
+            striped-rows
+            export-filename="productos"
             class="products-table"
             size="small"
           >
-            <Column header="Producto">
+            <Column field="descripcion" header="Producto" sortable>
               <template #body="{ data }">
                 <div class="products-main-cell">
                   <strong>{{ data.descripcion }}</strong>
-                  <small>{{ data.cod_producto }}<template v-if="data.codigo_barra"> · {{ data.codigo_barra }}</template></small>
+                  <small>{{ data.cod_producto }}<template v-if="data.codigo_barra"> / {{ data.codigo_barra }}</template></small>
                 </div>
               </template>
             </Column>
-            <Column header="Linea">
+            <Column field="linea.linea" header="Linea" sortable>
               <template #body="{ data }">
                 {{ data.linea?.linea || "-" }}
               </template>
             </Column>
-            <Column header="Segmento">
+            <Column field="segmento.segmento" header="Segmento" sortable>
               <template #body="{ data }">
                 {{ data.segmento?.segmento || "-" }}
               </template>
             </Column>
-            <Column header="Precio 1">
+            <Column field="precio_venta1" header="Precio 1" sortable>
               <template #body="{ data }">
                 {{ currencySymbol }} {{ formatMoney(data.precio_venta1) }}
               </template>
             </Column>
-            <Column header="Costo">
+            <Column field="costo_producto" header="Costo" sortable>
               <template #body="{ data }">
                 {{ currencySymbol }} {{ formatMoney(data.costo_producto) }}
               </template>
             </Column>
-            <Column header="Stock">
+            <Column field="saldo.existencia" header="Stock" sortable>
               <template #body="{ data }">
                 {{ formatQty(data.saldo?.existencia ?? 0) }}
               </template>
             </Column>
-            <Column header="Estado">
+            <Column field="activo" header="Estado" sortable>
               <template #body="{ data }">
                 <Tag :severity="data.activo ? 'success' : 'contrast'" :value="data.activo ? 'Activo' : 'Inactivo'" />
               </template>
             </Column>
-            <Column header="Acciones">
+            <Column header="Acciones" frozen align-frozen="right">
               <template #body="{ data }">
                 <div class="products-actions-cell">
                   <Button
@@ -248,14 +270,18 @@
           <div v-if="currentFormTab === 'general'" class="odoo-sheet-section">
             <div class="odoo-field-grid">
               <div class="odoo-field field-span-3">
-                <span class="odoo-field-label">Descripcion</span>
-                <InputText
-                  v-model.trim="form.descripcion"
-                  :disabled="saving"
-                  maxlength="200"
-                  @input="form.descripcion = toUpperValue(form.descripcion)"
-                  @focus="selectField"
-                />
+                <FloatLabel variant="on">
+                  <InputText
+                    id="product-description"
+                    v-model.trim="form.descripcion"
+                    :class="{ 'p-invalid': productFieldInvalid('descripcion') }"
+                    :disabled="saving"
+                    maxlength="200"
+                    @input="form.descripcion = toUpperValue(form.descripcion)"
+                    @focus="selectField"
+                  />
+                  <label for="product-description">Descripcion</label>
+                </FloatLabel>
               </div>
 
               <div class="odoo-field field-span-1">
@@ -267,76 +293,87 @@
 
               <div class="odoo-field field-span-2">
                 <div class="odoo-field-inlinehead">
-                  <span class="odoo-field-label">Codigo de barra</span>
                   <label class="products-checkbox products-checkbox-inline products-checkbox-compact">
                     <Checkbox v-model="form.usa_codigo_barra" binary @change="handleBarcodeToggle" />
                     <span>Usar lector</span>
                   </label>
                 </div>
-                <InputText
-                  v-model.trim="form.codigo_barra"
-                  :disabled="!form.usa_codigo_barra"
-                  maxlength="120"
-                  :placeholder="form.usa_codigo_barra ? 'Escanear o digitar codigo de barra' : 'Active el uso de codigo de barra'"
-                  @input="form.codigo_barra = toUpperValue(form.codigo_barra)"
-                  @focus="selectField"
-                />
+                <FloatLabel variant="on">
+                  <InputText
+                    id="product-barcode"
+                    v-model.trim="form.codigo_barra"
+                    :disabled="!form.usa_codigo_barra"
+                    maxlength="120"
+                    @input="form.codigo_barra = toUpperValue(form.codigo_barra)"
+                    @focus="selectField"
+                  />
+                  <label for="product-barcode">{{ form.usa_codigo_barra ? "Codigo de barra" : "Codigo de barra inactivo" }}</label>
+                </FloatLabel>
               </div>
 
               <div class="odoo-field">
-                <span class="odoo-field-label">Linea</span>
-                <Select
-                  v-model="form.linea_id"
-                  :options="catalogOptions.lineas"
-                  option-label="linea"
-                  option-value="id"
-                  placeholder="Seleccionar"
-                  filter
-                  :filter-fields="['linea', 'cod_linea']"
-                  show-clear
-                />
+                <FloatLabel variant="on">
+                  <Select
+                    id="product-line"
+                    v-model="form.linea_id"
+                    :options="catalogOptions.lineas"
+                    option-label="linea"
+                    option-value="id"
+                    filter
+                    :filter-fields="['linea', 'cod_linea']"
+                    show-clear
+                  />
+                  <label for="product-line">Linea</label>
+                </FloatLabel>
               </div>
 
               <div class="odoo-field">
-                <span class="odoo-field-label">Segmento</span>
-                <Select
-                  v-model="form.segmento_id"
-                  :options="catalogOptions.segmentos"
-                  option-label="segmento"
-                  option-value="id"
-                  placeholder="Seleccionar"
-                  filter
-                  :filter-fields="['segmento']"
-                  show-clear
-                />
+                <FloatLabel variant="on">
+                  <Select
+                    id="product-segment"
+                    v-model="form.segmento_id"
+                    :options="catalogOptions.segmentos"
+                    option-label="segmento"
+                    option-value="id"
+                    filter
+                    :filter-fields="['segmento']"
+                    show-clear
+                  />
+                  <label for="product-segment">Segmento</label>
+                </FloatLabel>
               </div>
 
               <div class="odoo-field">
-                <span class="odoo-field-label">Unidad</span>
-                <Select
-                  v-model="form.unidad_medida_id"
-                  :options="catalogOptions.unidades"
-                  option-label="nombre"
-                  option-value="id"
-                  placeholder="Seleccionar"
-                  filter
-                  :filter-fields="['nombre', 'codigo', 'abreviatura']"
-                  show-clear
-                />
+                <FloatLabel variant="on">
+                  <Select
+                    id="product-unit"
+                    v-model="form.unidad_medida_id"
+                    :class="{ 'p-invalid': productFieldInvalid('unidad_medida_id') }"
+                    :options="catalogOptions.unidades"
+                    option-label="nombre"
+                    option-value="id"
+                    filter
+                    :filter-fields="['nombre', 'codigo', 'abreviatura']"
+                    show-clear
+                  />
+                  <label for="product-unit">Unidad</label>
+                </FloatLabel>
               </div>
 
               <div class="odoo-field">
-                <span class="odoo-field-label">Marca</span>
-                <Select
-                  v-model="form.marca_id"
-                  :options="catalogOptions.marcas"
-                  option-label="nombre"
-                  option-value="id"
-                  placeholder="Seleccionar"
-                  filter
-                  :filter-fields="['nombre']"
-                  show-clear
-                />
+                <FloatLabel variant="on">
+                  <Select
+                    id="product-brand"
+                    v-model="form.marca_id"
+                    :options="catalogOptions.marcas"
+                    option-label="nombre"
+                    option-value="id"
+                    filter
+                    :filter-fields="['nombre']"
+                    show-clear
+                  />
+                  <label for="product-brand">Marca</label>
+                </FloatLabel>
               </div>
 
               <div class="odoo-field">
@@ -367,87 +404,105 @@
             </div>
             <div class="odoo-field-grid">
               <div class="odoo-field">
-                <span class="odoo-field-label">Costo ({{ currencySymbol }})</span>
-                <InputNumber
-                  v-model="form.costo_producto"
-                  mode="decimal"
-                  :min="0"
-                  :min-fraction-digits="2"
-                  :max-fraction-digits="2"
-                  :use-grouping="true"
-                  input-class="erp-number-input"
-                  @focus="selectField"
-                />
+                <FloatLabel variant="on">
+                  <InputNumber
+                    id="product-cost"
+                    v-model="form.costo_producto"
+                    mode="decimal"
+                    :min="0"
+                    :min-fraction-digits="2"
+                    :max-fraction-digits="2"
+                    :use-grouping="true"
+                    input-class="erp-number-input"
+                    @focus="selectField"
+                  />
+                  <label for="product-cost">Costo ({{ currencySymbol }})</label>
+                </FloatLabel>
               </div>
 
               <div class="odoo-field">
-                <span class="odoo-field-label">Precio venta 1 ({{ currencySymbol }})</span>
-                <InputNumber
-                  v-model="form.precio_venta1"
-                  mode="decimal"
-                  :min="0"
-                  :min-fraction-digits="2"
-                  :max-fraction-digits="2"
-                  :use-grouping="true"
-                  input-class="erp-number-input"
-                  @focus="selectField"
-                />
+                <FloatLabel variant="on">
+                  <InputNumber
+                    id="product-price-1"
+                    v-model="form.precio_venta1"
+                    mode="decimal"
+                    :min="0"
+                    :min-fraction-digits="2"
+                    :max-fraction-digits="2"
+                    :use-grouping="true"
+                    input-class="erp-number-input"
+                    @focus="selectField"
+                  />
+                  <label for="product-price-1">Precio venta 1 ({{ currencySymbol }})</label>
+                </FloatLabel>
               </div>
 
               <div class="odoo-field">
-                <span class="odoo-field-label">Precio venta 2 ({{ currencySymbol }})</span>
-                <InputNumber
-                  v-model="form.precio_venta2"
-                  mode="decimal"
-                  :min="0"
-                  :min-fraction-digits="2"
-                  :max-fraction-digits="2"
-                  :use-grouping="true"
-                  input-class="erp-number-input"
-                  @focus="selectField"
-                />
+                <FloatLabel variant="on">
+                  <InputNumber
+                    id="product-price-2"
+                    v-model="form.precio_venta2"
+                    mode="decimal"
+                    :min="0"
+                    :min-fraction-digits="2"
+                    :max-fraction-digits="2"
+                    :use-grouping="true"
+                    input-class="erp-number-input"
+                    @focus="selectField"
+                  />
+                  <label for="product-price-2">Precio venta 2 ({{ currencySymbol }})</label>
+                </FloatLabel>
               </div>
 
               <div class="odoo-field">
-                <span class="odoo-field-label">Precio venta 3 ({{ currencySymbol }})</span>
-                <InputNumber
-                  v-model="form.precio_venta3"
-                  mode="decimal"
-                  :min="0"
-                  :min-fraction-digits="2"
-                  :max-fraction-digits="2"
-                  :use-grouping="true"
-                  input-class="erp-number-input"
-                  @focus="selectField"
-                />
+                <FloatLabel variant="on">
+                  <InputNumber
+                    id="product-price-3"
+                    v-model="form.precio_venta3"
+                    mode="decimal"
+                    :min="0"
+                    :min-fraction-digits="2"
+                    :max-fraction-digits="2"
+                    :use-grouping="true"
+                    input-class="erp-number-input"
+                    @focus="selectField"
+                  />
+                  <label for="product-price-3">Precio venta 3 ({{ currencySymbol }})</label>
+                </FloatLabel>
               </div>
 
               <template v-if="!editingProductId">
                 <div class="odoo-field">
-                  <span class="odoo-field-label">Existencia inicial</span>
-                  <InputNumber
-                    v-model="form.existencia"
-                    :min="0"
-                    :min-fraction-digits="2"
-                    :max-fraction-digits="2"
-                    :use-grouping="false"
-                    input-class="erp-number-input"
-                    @focus="selectField"
-                  />
+                  <FloatLabel variant="on">
+                    <InputNumber
+                      id="product-initial-stock"
+                      v-model="form.existencia"
+                      :min="0"
+                      :min-fraction-digits="2"
+                      :max-fraction-digits="2"
+                      :use-grouping="false"
+                      input-class="erp-number-input"
+                      @focus="selectField"
+                    />
+                    <label for="product-initial-stock">Existencia inicial</label>
+                  </FloatLabel>
                 </div>
 
                 <div class="odoo-field">
-                  <span class="odoo-field-label">Bodega inicial</span>
-                  <Select
-                    v-model="form.bodega_inicial_id"
-                    :options="catalogOptions.bodegas"
-                    option-label="name"
-                    option-value="id"
-                    placeholder="Seleccionar"
-                    filter
-                    :filter-fields="['name', 'code']"
-                    show-clear
-                  />
+                  <FloatLabel variant="on">
+                    <Select
+                      id="product-initial-warehouse"
+                      v-model="form.bodega_inicial_id"
+                      :class="{ 'p-invalid': productFieldInvalid('bodega_inicial_id') }"
+                      :options="catalogOptions.bodegas"
+                      option-label="name"
+                      option-value="id"
+                      filter
+                      :filter-fields="['name', 'code']"
+                      show-clear
+                    />
+                    <label for="product-initial-warehouse">Bodega inicial</label>
+                  </FloatLabel>
                 </div>
               </template>
             </div>
@@ -458,7 +513,13 @@
 
         <div class="product-form-actions">
           <Button type="button" label="Cancelar" severity="secondary" variant="outlined" @click="closeDialog" />
-          <Button type="submit" :label="saving ? 'Guardando...' : editingProductId ? 'Actualizar' : 'Crear producto'" :loading="saving" />
+          <Button
+            type="button"
+            :label="saving ? 'Guardando...' : editingProductId ? 'Actualizar' : 'Crear producto'"
+            :loading="saving"
+            :disabled="saving"
+            @click="submitForm"
+          />
         </div>
       </form>
     </Dialog>
@@ -650,19 +711,23 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
+import { FilterMatchMode } from "@primevue/core/api";
 import Button from "primevue/button";
 import Card from "primevue/card";
 import Checkbox from "primevue/checkbox";
 import Column from "primevue/column";
 import DataTable from "primevue/datatable";
 import Dialog from "primevue/dialog";
+import FloatLabel from "primevue/floatlabel";
 import IconField from "primevue/iconfield";
 import InputIcon from "primevue/inputicon";
 import InputNumber from "primevue/inputnumber";
 import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import Tag from "primevue/tag";
+import { useConfirm } from "primevue/useconfirm";
+import { useToast } from "primevue/usetoast";
 
 import {
   createProduct,
@@ -688,10 +753,15 @@ const showInactive = ref(false);
 const loading = ref(true);
 const error = ref("");
 const products = ref([]);
+const productTable = ref(null);
+const productTableFilters = ref({
+  global: { value: null, matchMode: FilterMatchMode.CONTAINS },
+});
 const dialogVisible = ref(false);
 const saving = ref(false);
 const brandSaving = ref(false);
 const formError = ref("");
+const formSubmitted = ref(false);
 const brandError = ref("");
 const editingProductId = ref(null);
 const currentFormTab = ref("general");
@@ -702,6 +772,8 @@ const catalogSaving = ref(false);
 const catalogError = ref("");
 const currentUser = readStoredUser();
 const businessSettings = readStoredBusinessSettings() || {};
+const confirm = useConfirm();
+const toast = useToast();
 const catalogs = reactive({
   lineas: 0,
   segmentos: 0,
@@ -720,14 +792,9 @@ const catalogForm = reactive(getEmptyCatalogForm());
 const form = reactive(getEmptyForm());
 
 const filteredProducts = computed(() => {
-  const query = search.value.trim().toLowerCase();
   return products.value.filter((product) => {
     const matchesStatus = showInactive.value ? true : product.activo;
-    const matchesQuery =
-      !query ||
-      (product.cod_producto || "").toLowerCase().includes(query) ||
-      (product.descripcion || "").toLowerCase().includes(query);
-    return matchesStatus && matchesQuery;
+    return matchesStatus;
   });
 });
 
@@ -812,8 +879,18 @@ function getEmptyCatalogForm() {
 function resetForm() {
   Object.assign(form, getEmptyForm());
   formError.value = "";
+  formSubmitted.value = false;
   editingProductId.value = null;
   currentFormTab.value = "general";
+}
+
+function applyProductDefaults() {
+  form.linea_id = form.linea_id || catalogOptions.lineas[0]?.id || null;
+  form.segmento_id = form.segmento_id || catalogOptions.segmentos[0]?.id || null;
+  form.unidad_medida_id = form.unidad_medida_id || catalogOptions.unidades[0]?.id || null;
+  if (!editingProductId.value && Number(form.existencia || 0) > 0) {
+    form.bodega_inicial_id = form.bodega_inicial_id || catalogOptions.bodegas[0]?.id || null;
+  }
 }
 
 function resetBrandForm() {
@@ -837,6 +914,16 @@ function formatQty(value) {
   return Number(value || 0).toFixed(2);
 }
 
+function exportProductsTable() {
+  productTable.value?.exportCSV();
+  toast.add({
+    severity: "info",
+    summary: "Exportacion iniciada",
+    detail: "El catalogo de productos se esta descargando en CSV.",
+    life: 2600,
+  });
+}
+
 function selectField(event) {
   const target = event?.target || event?.originalEvent?.target;
   if (target && typeof target.select === "function") {
@@ -858,19 +945,35 @@ async function loadData() {
       fetchProducts("", true),
     ]);
 
-    catalogs.lineas = catalogData.lineas.length;
-    catalogs.segmentos = catalogData.segmentos.length;
-    catalogs.unidades = catalogData.unidades_medida.length;
-    catalogs.marcas = catalogData.marcas.length;
-    catalogs.bodegas = catalogData.bodegas.length;
-    catalogOptions.lineas = catalogData.lineas;
-    catalogOptions.segmentos = catalogData.segmentos;
-    catalogOptions.unidades = catalogData.unidades_medida;
-    catalogOptions.marcas = catalogData.marcas;
-    catalogOptions.bodegas = catalogData.bodegas;
-    products.value = productData;
+    const lineas = Array.isArray(catalogData?.lineas) ? catalogData.lineas : [];
+    const segmentos = Array.isArray(catalogData?.segmentos) ? catalogData.segmentos : [];
+    const unidades = Array.isArray(catalogData?.unidades_medida)
+      ? catalogData.unidades_medida
+      : Array.isArray(catalogData?.unidades)
+        ? catalogData.unidades
+        : [];
+    const marcas = Array.isArray(catalogData?.marcas) ? catalogData.marcas : [];
+    const bodegas = Array.isArray(catalogData?.bodegas) ? catalogData.bodegas : [];
+
+    catalogs.lineas = lineas.length;
+    catalogs.segmentos = segmentos.length;
+    catalogs.unidades = unidades.length;
+    catalogs.marcas = marcas.length;
+    catalogs.bodegas = bodegas.length;
+    catalogOptions.lineas = lineas;
+    catalogOptions.segmentos = segmentos;
+    catalogOptions.unidades = unidades;
+    catalogOptions.marcas = marcas;
+    catalogOptions.bodegas = bodegas;
+    products.value = Array.isArray(productData) ? productData : [];
   } catch (err) {
     error.value = err.message || "No se pudo cargar el catalogo";
+    toast.add({
+      severity: "error",
+      summary: "No se pudo cargar productos",
+      detail: error.value,
+      life: 4200,
+    });
   } finally {
     loading.value = false;
   }
@@ -878,6 +981,7 @@ async function loadData() {
 
 async function openCreateDialog() {
   resetForm();
+  applyProductDefaults();
   dialogVisible.value = true;
   form.cod_producto = "";
   try {
@@ -955,6 +1059,33 @@ function buildPayload() {
   };
 }
 
+function validateProductForm() {
+  applyProductDefaults();
+  if (!(form.descripcion || "").trim()) {
+    currentFormTab.value = "general";
+    return "La descripcion del producto es requerida.";
+  }
+  if (!form.unidad_medida_id) {
+    currentFormTab.value = "general";
+    return "Selecciona una unidad de medida.";
+  }
+  if (!editingProductId.value && Number(form.existencia || 0) > 0 && !form.bodega_inicial_id) {
+    currentFormTab.value = "commercial";
+    return "Selecciona la bodega inicial para registrar existencia.";
+  }
+  return "";
+}
+
+function productFieldInvalid(field) {
+  if (!formSubmitted.value) return false;
+  if (field === "descripcion") return !(form.descripcion || "").trim();
+  if (field === "unidad_medida_id") return !form.unidad_medida_id;
+  if (field === "bodega_inicial_id") {
+    return !editingProductId.value && Number(form.existencia || 0) > 0 && !form.bodega_inicial_id;
+  }
+  return false;
+}
+
 function handleBarcodeToggle() {
   if (!form.usa_codigo_barra) {
     form.codigo_barra = "";
@@ -962,10 +1093,18 @@ function handleBarcodeToggle() {
 }
 
 async function submitForm() {
+  if (saving.value) return;
   saving.value = true;
   formError.value = "";
+  formSubmitted.value = true;
   try {
+    const validationError = validateProductForm();
+    if (validationError) {
+      formError.value = validationError;
+      return;
+    }
     const payload = buildPayload();
+    const wasEditing = Boolean(editingProductId.value);
     if (editingProductId.value) {
       await updateProduct(editingProductId.value, payload);
     } else {
@@ -973,20 +1112,55 @@ async function submitForm() {
     }
     await loadData();
     closeDialog();
+    toast.add({
+      severity: "success",
+      summary: wasEditing ? "Producto actualizado" : "Producto creado",
+      detail: "El catalogo fue actualizado correctamente.",
+      life: 3000,
+    });
   } catch (err) {
     formError.value = err.message || "No se pudo guardar el producto";
+    toast.add({
+      severity: "error",
+      summary: "No se pudo guardar",
+      detail: formError.value,
+      life: 4200,
+    });
   } finally {
     saving.value = false;
   }
 }
 
 async function toggleActive(product) {
-  try {
-    await toggleProductActive(product.id);
-    await loadData();
-  } catch (err) {
-    error.value = err.message || "No se pudo actualizar el estado";
-  }
+  const nextStateLabel = product.activo ? "desactivar" : "activar";
+  confirm.require({
+    header: product.activo ? "Desactivar producto" : "Activar producto",
+    message: `Confirma que deseas ${nextStateLabel} ${product.cod_producto || "este producto"}.`,
+    icon: "bi bi-exclamation-triangle",
+    rejectLabel: "Cancelar",
+    acceptLabel: product.activo ? "Desactivar" : "Activar",
+    acceptClass: product.activo ? "p-button-danger" : "p-button-primary",
+    accept: async () => {
+      try {
+        await toggleProductActive(product.id);
+        await loadData();
+        toast.add({
+          severity: "success",
+          summary: "Estado actualizado",
+          detail: `Producto ${product.activo ? "desactivado" : "activado"} correctamente.`,
+          life: 2800,
+        });
+      } catch (err) {
+        error.value = err.message || "No se pudo actualizar el estado";
+        toast.add({
+          severity: "error",
+          summary: "No se pudo actualizar",
+          detail: error.value,
+          life: 4200,
+        });
+      }
+    },
+  });
 }
 
 function openBrandDialog() {
@@ -1016,6 +1190,7 @@ async function submitBrand() {
   brandSaving.value = true;
   brandError.value = "";
   try {
+    const wasEditingBrand = Boolean(brandForm.id);
     const payload = {
       nombre: brandForm.nombre,
       activo: Boolean(brandForm.activo),
@@ -1027,8 +1202,20 @@ async function submitBrand() {
     }
     await loadData();
     resetBrandForm();
+    toast.add({
+      severity: "success",
+      summary: wasEditingBrand ? "Marca actualizada" : "Marca creada",
+      detail: "El catalogo de marcas fue actualizado.",
+      life: 2800,
+    });
   } catch (err) {
     brandError.value = err.message || "No se pudo guardar la marca";
+    toast.add({
+      severity: "error",
+      summary: "No se pudo guardar la marca",
+      detail: brandError.value,
+      life: 4200,
+    });
   } finally {
     brandSaving.value = false;
   }
@@ -1043,7 +1230,7 @@ function currentCatalogTitle(item) {
 function currentCatalogSubtitle(item) {
   if (currentCatalogTab.value === "lineas") return item.cod_linea || "Sin codigo";
   if (currentCatalogTab.value === "segmentos") return "Segmento operativo";
-  return `${item.codigo || ""}${item.abreviatura ? ` · ${item.abreviatura}` : ""}`.trim();
+  return `${item.codigo || ""}${item.abreviatura ? ` / ${item.abreviatura}` : ""}`.trim();
 }
 
 function editCatalogItem(item) {
@@ -1105,8 +1292,20 @@ async function submitCatalog() {
     }
     await loadData();
     resetCatalogForm();
+    toast.add({
+      severity: "success",
+      summary: "Subcatalogo actualizado",
+      detail: "Los datos auxiliares del inventario fueron guardados.",
+      life: 2800,
+    });
   } catch (err) {
     catalogError.value = err.message || "No se pudo guardar el subcatalogo";
+    toast.add({
+      severity: "error",
+      summary: "No se pudo guardar",
+      detail: catalogError.value,
+      life: 4200,
+    });
   } finally {
     catalogSaving.value = false;
   }
@@ -1114,5 +1313,9 @@ async function submitCatalog() {
 
 onMounted(async () => {
   await loadData();
+});
+
+watch(search, (value) => {
+  productTableFilters.value.global.value = value || null;
 });
 </script>

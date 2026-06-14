@@ -1,10 +1,10 @@
-# Estado actual del sistema ERP
+# Estado actual del sistema de planificacion de recursos empresariales
 
 Ultima actualizacion: 2026-06-02
 
 ## Resumen ejecutivo
 
-ERP System es una aplicacion web modular en desarrollo para Orange Tec. El
+El sistema de planificacion de recursos empresariales es una aplicacion web modular en desarrollo para Orange Tec. El
 nucleo operativo de autenticacion, catalogos, inventario, recetas, produccion y
 configuracion empresarial ya existe. El terminal de ventas tiene una interfaz
 avanzada y responsive, pero todavia no persiste facturas, clientes, vendedores
@@ -44,8 +44,8 @@ docker compose up --build -d
 | `/app/products` | Productos | Funcional; CRUD, catalogos, activacion y recetas |
 | `/app/inventory/movements` | Inventario | Funcional; ingresos, egresos y consulta operativa |
 | `/app/inventory/production` | Produccion | Funcional; apertura, ejecucion y reporte |
-| `/app/sales` | Ventas | UI funcional; persistencia comercial pendiente |
-| `/app/settings/business` | Configuracion | Funcional; empresa, logos, politicas y entornos |
+| `/app/sales` | Ventas | POS funcional; factura, pagos, stock y egreso de inventario |
+| `/app/settings/business` | Configuracion | Funcional; empresa, logos, politicas, entornos y tasas |
 
 ## Funcionalidades implementadas
 
@@ -53,7 +53,8 @@ docker compose up --build -d
 
 - Registro de usuario mediante API.
 - Inicio de sesion con correo o nombre visible.
-- Token JWT tipo Bearer con expiracion de 60 minutos.
+- Token JWT tipo Bearer con expiracion configurable; desarrollo usa 480
+  minutos (8 horas).
 - Consulta del usuario autenticado.
 - Usuario administrador sembrado al iniciar el backend.
 
@@ -91,29 +92,38 @@ docker compose up --build -d
 - Nombre legal y comercial.
 - Titulo de aplicacion y subtitulo lateral.
 - Direccion, RUC, telefonos, correo y sitio web.
-- Logos para login, sidebar, factura y favicon.
+- Logos para login, factura y comercio. El logo del comercio se usa en sidebar
+  y favicon.
 - Moneda de precios.
+- Registro de tasa de cambio diaria, mensual o trimestral.
+- Tasa vigente disponible para ventas, inventario y produccion.
 - Politicas de inventario, peso, recetas, multibodega y margen automatico.
 - Registro y activacion de entornos de empresa.
 
 ### Ventas
 
-Implementado en frontend:
+Implementado:
 
 - Busqueda de productos conectada a inventario.
 - Lector de codigo de barras.
 - Ticket, cantidades, precios, descuentos y resumen.
 - Cliente, vendedor, observacion, condicion, fecha y bodega.
 - Modal de cobro con metodos de pago, moneda, bancos y cuentas.
+- Conversiones USD/C$ basadas en la tasa vigente registrada.
+- Control de inventario activo: solo permite cargar/facturar productos con
+  existencia disponible por bodega.
+- Consecutivo POS `POS-000001` mediante backend.
+- Confirmar venta registra factura POS, detalle, pagos aplicados y egreso tipo
+  `Venta`, descontando saldo real.
+- Recibo POS en pantalla con opcion de impresion basica.
 - Diseno responsive validado a `390px`.
 
-Pendiente en backend:
+Pendiente:
 
-- Tablas comerciales.
 - Endpoints para clientes y vendedores.
-- Persistencia de facturas, detalle, pagos y caja.
-- Consecutivo fiscal real.
-- Afectacion de inventario al confirmar venta.
+- Catalogos reales para bancos, cuentas y formas de pago.
+- Caja, apertura, cierre, cobranza y depositos.
+- Consecutivo fiscal legal y PDF.
 
 ## Inicializacion automatica del backend
 

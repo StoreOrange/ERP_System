@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, Column, Integer, String, Text
+from datetime import datetime
+
+from sqlalchemy import Boolean, Column, Date, DateTime, Integer, Numeric, String, Text
 
 from ..database import Base
 
@@ -42,3 +44,15 @@ class CompanyEnvironment(Base):
     company_name = Column(String(180), nullable=False)
     database_url = Column(Text, nullable=False)
     is_active = Column(Boolean, nullable=False, default=False)
+
+
+class ExchangeRate(Base):
+    __tablename__ = "exchange_rates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    effective_date = Column(Date, nullable=False, index=True)
+    period_type = Column(String(20), nullable=False, default="daily")
+    rate = Column(Numeric(12, 4), nullable=False)
+    notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

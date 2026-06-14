@@ -153,8 +153,13 @@ class Bodega(Base):
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String(40), unique=True, nullable=False)
     name = Column(String(120), nullable=False)
+    sucursal_id = Column(Integer, ForeignKey("sucursales.id"), nullable=True)
     activo = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
+
+    sucursal = relationship("Branch", back_populates="bodegas")
+    access_profiles = relationship("UserAccessProfile", back_populates="bodega")
+    vendors = relationship("Vendor", back_populates="bodega")
 
 
 class Proveedor(Base):
@@ -307,4 +312,73 @@ class ProduccionInventarioLinea(Base):
     subtotal_cs = Column(Numeric(14, 2), default=0)
 
     produccion = relationship("ProduccionInventario", back_populates="lineas")
+    producto = relationship("Producto")
+
+
+class PacaApertura(Base):
+    __tablename__ = "paca_aperturas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    paca_producto_id = Column(Integer, ForeignKey("productos.id"), nullable=False)
+    bodega_id = Column(Integer, ForeignKey("bodegas.id"), nullable=False)
+    bodega_destino_id = Column(Integer, ForeignKey("bodegas.id"), nullable=True)
+    fecha = Column(Date, nullable=False)
+    cantidad_pacas = Column(Numeric(14, 4), nullable=False, default=1)
+    moneda = Column(String(10), nullable=False, default="CS")
+    tasa_cambio = Column(Numeric(12, 4), nullable=True)
+    costo_origen_usd = Column(Numeric(14, 2), default=0)
+    costo_origen_cs = Column(Numeric(14, 2), default=0)
+    valor_estimado_usd = Column(Numeric(14, 2), default=0)
+    valor_estimado_cs = Column(Numeric(14, 2), default=0)
+    diferencia_usd = Column(Numeric(14, 2), default=0)
+    diferencia_cs = Column(Numeric(14, 2), default=0)
+    estado = Column(String(20), nullable=False, default="FINALIZADA")
+    observacion = Column(String(300), nullable=True)
+    usuario_registro = Column(String(120), nullable=True)
+    ingreso_id = Column(Integer, ForeignKey("ingresos_inventario.id"), nullable=True)
+    egreso_id = Column(Integer, ForeignKey("egresos_inventario.id"), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    paca_producto = relationship("Producto", foreign_keys=[paca_producto_id])
+    bodega = relationship("Bodega", foreign_keys=[bodega_id])
+    bodega_destino = relationship("Bodega", foreign_keys=[bodega_destino_id])
+    ingreso = relationship("IngresoInventario", foreign_keys=[ingreso_id])
+    egreso = relationship("EgresoInventario", foreign_keys=[egreso_id])
+    origenes = relationship("PacaAperturaOrigen", back_populates="apertura", cascade="all, delete-orphan")
+    lineas = relationship("PacaAperturaLinea", back_populates="apertura", cascade="all, delete-orphan")
+
+
+class PacaAperturaOrigen(Base):
+    __tablename__ = "paca_apertura_origenes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    apertura_id = Column(Integer, ForeignKey("paca_aperturas.id"), nullable=False)
+    producto_id = Column(Integer, ForeignKey("productos.id"), nullable=False)
+    cantidad = Column(Numeric(14, 4), nullable=False, default=0)
+    costo_unitario_usd = Column(Numeric(14, 2), default=0)
+    costo_unitario_cs = Column(Numeric(14, 2), default=0)
+    subtotal_usd = Column(Numeric(14, 2), default=0)
+    subtotal_cs = Column(Numeric(14, 2), default=0)
+
+    apertura = relationship("PacaApertura", back_populates="origenes")
+    producto = relationship("Producto")
+
+
+class PacaAperturaLinea(Base):
+    __tablename__ = "paca_apertura_lineas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    apertura_id = Column(Integer, ForeignKey("paca_aperturas.id"), nullable=False)
+    producto_id = Column(Integer, ForeignKey("productos.id"), nullable=False)
+    cantidad = Column(Numeric(14, 4), nullable=False, default=0)
+    precio_estimado_unitario_usd = Column(Numeric(14, 2), default=0)
+    precio_estimado_unitario_cs = Column(Numeric(14, 2), default=0)
+    valor_estimado_usd = Column(Numeric(14, 2), default=0)
+    valor_estimado_cs = Column(Numeric(14, 2), default=0)
+    costo_asignado_unitario_usd = Column(Numeric(14, 2), default=0)
+    costo_asignado_unitario_cs = Column(Numeric(14, 2), default=0)
+    costo_asignado_usd = Column(Numeric(14, 2), default=0)
+    costo_asignado_cs = Column(Numeric(14, 2), default=0)
+
+    apertura = relationship("PacaApertura", back_populates="lineas")
     producto = relationship("Producto")

@@ -10,11 +10,12 @@ from .config import settings as app_settings
 from .core.security import hash_password
 from .database import Base, SessionLocal, engine
 from .models.inventory import Bodega, EgresoTipo, IngresoTipo, Linea, Marca, Producto, Proveedor, Segmento, UnidadMedida
-from .models.settings import BusinessSetting, CompanyEnvironment
-from .models.user import Role, User
-from .routers import auth, inventory, settings
+from .models.sales import Customer, SalesInvoice, SalesInvoiceItem, SalesPayment, SalesSequence
+from .models.settings import BusinessSetting, CompanyEnvironment, ExchangeRate
+from .models.user import Branch, Role, User, UserAccessProfile, Vendor
+from .routers import access, auth, inventory, sales, settings
 
-app = FastAPI(title="ERP System Backend")
+app = FastAPI(title="Sistema de planificacion de recursos empresariales Backend")
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 UPLOADS_DIR = BACKEND_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
@@ -30,14 +31,16 @@ app.add_middleware(
 Base.metadata.create_all(bind=engine)
 
 app.include_router(auth.router)
+app.include_router(access.router)
 app.include_router(inventory.router)
+app.include_router(sales.router)
 app.include_router(settings.router)
 app.mount("/media", StaticFiles(directory=UPLOADS_DIR), name="media")
 
 
 @app.get("/")
 def root():
-    return {"message": "API ERP lista"}
+    return {"message": "API del sistema empresarial lista"}
 
 
 @app.get("/sales", include_in_schema=False)
@@ -107,6 +110,79 @@ def seed_inventory_catalogs():
             connection.execute(
                 text(
                     """
+                    CREATE TABLE IF NOT EXISTS sucursales (
+                        id SERIAL PRIMARY KEY,
+                        code VARCHAR(40) UNIQUE NOT NULL,
+                        name VARCHAR(140) NOT NULL,
+                        address VARCHAR(220),
+                        phone VARCHAR(80),
+                        activo BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    ALTER TABLE bodegas
+                    ADD COLUMN IF NOT EXISTS sucursal_id INTEGER REFERENCES sucursales(id)
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS user_access_profiles (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                        sucursal_id INTEGER REFERENCES sucursales(id),
+                        bodega_id INTEGER REFERENCES bodegas(id),
+                        role_scope VARCHAR(50) NOT NULL DEFAULT 'VENDEDOR',
+                        can_sell BOOLEAN DEFAULT TRUE,
+                        can_move_inventory BOOLEAN DEFAULT FALSE,
+                        can_manage_catalogs BOOLEAN DEFAULT FALSE,
+                        is_default BOOLEAN DEFAULT FALSE,
+                        activo BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_user_access_scope_idx
+                    ON user_access_profiles (
+                        user_id,
+                        COALESCE(sucursal_id, 0),
+                        COALESCE(bodega_id, 0)
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS vendedores (
+                        id SERIAL PRIMARY KEY,
+                        code VARCHAR(40) UNIQUE NOT NULL,
+                        nombre VARCHAR(160) NOT NULL,
+                        user_id INTEGER UNIQUE REFERENCES users(id),
+                        sucursal_id INTEGER REFERENCES sucursales(id),
+                        bodega_id INTEGER REFERENCES bodegas(id),
+                        telefono VARCHAR(80),
+                        email VARCHAR(140),
+                        meta_ventas INTEGER,
+                        activo BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
                     CREATE TABLE IF NOT EXISTS marcas (
                         id SERIAL PRIMARY KEY,
                         nombre VARCHAR(120) UNIQUE NOT NULL,
@@ -151,6 +227,14 @@ def seed_inventory_catalogs():
             connection.execute(
                 text(
                     """
+                    ALTER TABLE paca_aperturas
+                    ADD COLUMN IF NOT EXISTS bodega_destino_id INTEGER REFERENCES bodegas(id)
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
                     CREATE UNIQUE INDEX IF NOT EXISTS ix_productos_codigo_barra
                     ON productos (codigo_barra)
                     WHERE codigo_barra IS NOT NULL
@@ -158,8 +242,17 @@ def seed_inventory_catalogs():
                 )
             )
 
+        default_branch = db.query(Branch).filter(Branch.code == "SUC-001").first()
+        if not default_branch:
+            default_branch = Branch(code="SUC-001", name="Sucursal Principal", activo=True)
+            db.add(default_branch)
+            db.flush()
+
         if not db.query(Bodega).first():
-            db.add(Bodega(code="BOD-001", name="Bodega Principal", activo=True))
+            db.add(Bodega(code="BOD-001", name="Bodega Principal", sucursal_id=default_branch.id, activo=True))
+            db.flush()
+
+        db.query(Bodega).filter(Bodega.sucursal_id.is_(None)).update({Bodega.sucursal_id: default_branch.id})
 
         default_lineas = [
             ("LIN-001", "General"),
@@ -234,6 +327,7 @@ def seed_inventory_catalogs():
                 db.add(IngresoTipo(nombre=nombre, requiere_proveedor=requiere_proveedor))
 
         default_egresos = [
+            "Venta",
             "Inventario Fisico",
             "Traslado entre bodegas",
             "Merma",
@@ -276,7 +370,7 @@ def seed_business_settings():
                 "ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS phone VARCHAR(80)",
                 "ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS email VARCHAR(180)",
                 "ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS theme_code VARCHAR(60) DEFAULT 'default'",
-                "ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS sales_interface_code VARCHAR(60) DEFAULT 'ropa'",
+                "ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS sales_interface_code VARCHAR(60) DEFAULT 'ecommerce'",
                 "ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS pricing_currency VARCHAR(10) DEFAULT 'CS'",
                 "ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS inventory_cs_only BOOLEAN DEFAULT FALSE",
                 "ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS weighted_inventory_enabled BOOLEAN DEFAULT FALSE",
@@ -295,8 +389,8 @@ def seed_business_settings():
                     business_name="Orange Tec",
                     legal_name="Orange Tec",
                     trade_name="Orange Tec",
-                    app_title="Orange Tec ERP",
-                    sidebar_subtitle="ERP Empresarial",
+                    app_title="Orange Tec Sistema empresarial",
+                    sidebar_subtitle="Sistema empresarial",
                     address="",
                     ruc="",
                     phone="",
@@ -304,7 +398,7 @@ def seed_business_settings():
                     email="",
                     website="",
                     theme_code="default",
-                    sales_interface_code="ropa",
+                    sales_interface_code="ecommerce",
                     pricing_currency="CS",
                 )
             )
@@ -312,22 +406,27 @@ def seed_business_settings():
             settings = db.query(BusinessSetting).first()
         if settings:
             legacy_interface_map = {
-                "sales_ropa": "ropa",
-                "sales_zapatos": "zapatos",
-                "sales_restaurante": "restaurante",
-                "sales_comestibles": "comestibles",
-                "sales_utilitario": "ropa",
-                "sales_roc": "ropa",
+                "sales_ropa": "ecommerce",
+                "sales_zapatos": "ecommerce",
+                "sales_restaurante": "supermarket",
+                "sales_comestibles": "supermarket",
+                "sales_utilitario": "ecommerce",
+                "sales_roc": "ecommerce",
+                "ropa": "ecommerce",
+                "zapatos": "ecommerce",
+                "restaurante": "supermarket",
+                "comestibles": "supermarket",
+                "ferreteria": "hardware",
             }
             settings.trade_name = settings.trade_name or settings.business_name or "Orange Tec"
             settings.legal_name = settings.legal_name or settings.trade_name
-            settings.app_title = settings.app_title or f"{settings.trade_name} ERP"
-            settings.sidebar_subtitle = settings.sidebar_subtitle or "ERP Empresarial"
+            settings.app_title = settings.app_title or f"{settings.trade_name} Sistema empresarial"
+            settings.sidebar_subtitle = settings.sidebar_subtitle or "Sistema empresarial"
             settings.theme_code = settings.theme_code or "default"
-            normalized_sales_interface = (settings.sales_interface_code or "ropa").strip().lower() or "ropa"
+            normalized_sales_interface = (settings.sales_interface_code or "ecommerce").strip().lower() or "ecommerce"
             normalized_sales_interface = legacy_interface_map.get(normalized_sales_interface, normalized_sales_interface)
-            if normalized_sales_interface not in {"ropa", "zapatos", "restaurante", "comestibles"}:
-                normalized_sales_interface = "ropa"
+            if normalized_sales_interface not in {"ecommerce", "supermarket", "hardware"}:
+                normalized_sales_interface = "ecommerce"
             settings.sales_interface_code = normalized_sales_interface
             settings.pricing_currency = (settings.pricing_currency or "CS").upper()
             if settings.pricing_currency not in {"CS", "USD"}:
@@ -351,6 +450,81 @@ def seed_business_settings():
         db.close()
 
 
+def seed_access_catalogs():
+    db = SessionLocal()
+    try:
+        role_names = ["administrador", "vendedor", "caja", "inventario", "supervisor"]
+        roles = {}
+        for role_name in role_names:
+            role = db.query(Role).filter(Role.name == role_name).first()
+            if not role:
+                role = Role(name=role_name)
+                db.add(role)
+                db.flush()
+            roles[role_name] = role
+
+        admin = db.query(User).filter(User.email == "administrador").first()
+        branch = db.query(Branch).filter(Branch.code == "SUC-001").first()
+        bodega = db.query(Bodega).order_by(Bodega.id).first()
+        if admin:
+            if roles["administrador"] not in admin.roles:
+                admin.roles.append(roles["administrador"])
+            if branch and bodega:
+                access_profile = (
+                    db.query(UserAccessProfile)
+                    .filter(
+                        UserAccessProfile.user_id == admin.id,
+                        UserAccessProfile.sucursal_id == branch.id,
+                        UserAccessProfile.bodega_id == bodega.id,
+                    )
+                    .first()
+                )
+                if not access_profile:
+                    db.add(
+                        UserAccessProfile(
+                            user_id=admin.id,
+                            sucursal_id=branch.id,
+                            bodega_id=bodega.id,
+                            role_scope="ADMINISTRADOR",
+                            can_sell=True,
+                            can_move_inventory=True,
+                            can_manage_catalogs=True,
+                            is_default=True,
+                            activo=True,
+                        )
+                    )
+            vendor = db.query(Vendor).filter(Vendor.code == "VEN-001").first()
+            if not vendor:
+                db.add(
+                    Vendor(
+                        code="VEN-001",
+                        nombre=admin.full_name or "Administrador",
+                        user_id=admin.id,
+                        sucursal_id=branch.id if branch else None,
+                        bodega_id=bodega.id if bodega else None,
+                        email=admin.email,
+                        activo=True,
+                    )
+                )
+            floor_vendor = db.query(Vendor).filter(Vendor.code == "VEN-PISO").first()
+            if not floor_vendor:
+                db.add(
+                    Vendor(
+                        code="VEN-PISO",
+                        nombre="Vendedor de piso",
+                        user_id=None,
+                        sucursal_id=branch.id if branch else None,
+                        bodega_id=bodega.id if bodega else None,
+                        email=None,
+                        activo=True,
+                    )
+                )
+        db.commit()
+    finally:
+        db.close()
+
+
 create_initial_admin()
 seed_inventory_catalogs()
 seed_business_settings()
+seed_access_catalogs()

@@ -18,6 +18,9 @@ from ..models.inventory import (
     IngresoTipo,
     Linea,
     Marca,
+    PacaApertura,
+    PacaAperturaOrigen,
+    PacaAperturaLinea,
     Producto,
     ProductoReceta,
     ProductoRecetaLinea,
@@ -28,7 +31,7 @@ from ..models.inventory import (
     Segmento,
     UnidadMedida,
 )
-from ..models.settings import BusinessSetting
+from ..models.settings import BusinessSetting, ExchangeRate
 from ..schemas.inventory import (
     BodegaCreate,
     BodegaResponse,
@@ -50,6 +53,8 @@ from ..schemas.inventory import (
     MarcaUpdate,
     ProductBodegaBalanceResponse,
     ProductSearchResponse,
+    PacaAperturaCreate,
+    PacaAperturaResponse,
     ProductoRecetaResponse,
     ProductoRecetaSaveRequest,
     ProductoCreate,
@@ -59,6 +64,7 @@ from ..schemas.inventory import (
     ProduccionInventarioResponse,
     ProveedorCreate,
     ProveedorResponse,
+    ProveedorUpdate,
     SegmentoCreate,
     SegmentoResponse,
     SegmentoUpdate,
@@ -115,6 +121,18 @@ def _require_exchange_rate(moneda: str, tasa_cambio: Decimal | None) -> Decimal:
             raise HTTPException(status_code=400, detail="La tasa de cambio es requerida para moneda USD")
         return tasa_cambio
     return tasa_cambio or Decimal("0")
+
+
+def _current_exchange_rate_value(db: Session) -> Decimal:
+    row = (
+        db.query(ExchangeRate)
+        .filter(ExchangeRate.is_active.is_(True), ExchangeRate.effective_date <= date.today())
+        .order_by(ExchangeRate.effective_date.desc(), ExchangeRate.id.desc())
+        .first()
+    )
+    if not row or Decimal(str(row.rate or 0)) <= 0:
+        raise HTTPException(status_code=400, detail="Registra una tasa de cambio vigente antes de procesar apertura de pacas")
+    return Decimal(str(row.rate)).quantize(Decimal("0.0001"))
 
 
 def _get_or_create_saldo(db: Session, producto_id: int) -> SaldoProducto:
@@ -344,6 +362,11 @@ def _resolve_or_create_ingreso_tipo(db: Session, nombre: str, requiere_proveedor
     return row
 
 
+def _is_compra_local_ingreso(nombre: str | None) -> bool:
+    normalized = (nombre or "").strip().lower()
+    return "compra" in normalized and "local" in normalized
+
+
 @router.get("/catalogs", response_model=InventoryCatalogsResponse)
 def get_catalogs(db: Session = Depends(get_db)):
     return InventoryCatalogsResponse(
@@ -522,6 +545,36 @@ def create_proveedor(payload: ProveedorCreate, db: Session = Depends(get_db)):
     if exists:
         raise HTTPException(status_code=400, detail="Proveedor ya existe")
     proveedor = Proveedor(**payload.model_dump())
+    db.add(proveedor)
+    db.commit()
+    db.refresh(proveedor)
+    return proveedor
+
+
+@router.put("/proveedores/{proveedor_id}", response_model=ProveedorResponse)
+def update_proveedor(proveedor_id: int, payload: ProveedorUpdate, db: Session = Depends(get_db)):
+    proveedor = db.query(Proveedor).filter(Proveedor.id == proveedor_id).first()
+    if not proveedor:
+        raise HTTPException(status_code=404, detail="Proveedor no encontrado")
+
+    data = payload.model_dump(exclude_unset=True)
+    if "nombre" in data:
+        nombre = (data.get("nombre") or "").strip()
+        if not nombre:
+            raise HTTPException(status_code=400, detail="Nombre de proveedor requerido")
+        exists = (
+            db.query(Proveedor)
+            .filter(func.lower(Proveedor.nombre) == nombre.lower(), Proveedor.id != proveedor.id)
+            .first()
+        )
+        if exists:
+            raise HTTPException(status_code=400, detail="Proveedor ya existe")
+        proveedor.nombre = nombre
+    if "tipo" in data:
+        proveedor.tipo = (data.get("tipo") or "").strip() or None
+    if "activo" in data:
+        proveedor.activo = bool(data["activo"])
+
     db.add(proveedor)
     db.commit()
     db.refresh(proveedor)
@@ -1181,6 +1234,277 @@ def get_production_report(production_id: int, db: Session = Depends(get_db)):
     return row
 
 
+def _load_paca_apertura(db: Session, apertura_id: int) -> PacaApertura | None:
+    return (
+        db.query(PacaApertura)
+        .options(
+            joinedload(PacaApertura.paca_producto),
+            joinedload(PacaApertura.bodega),
+            joinedload(PacaApertura.bodega_destino),
+            joinedload(PacaApertura.origenes).joinedload(PacaAperturaOrigen.producto),
+            joinedload(PacaApertura.lineas).joinedload(PacaAperturaLinea.producto),
+        )
+        .filter(PacaApertura.id == apertura_id)
+        .first()
+    )
+
+
+@router.post("/paca-aperturas", response_model=PacaAperturaResponse, status_code=status.HTTP_201_CREATED)
+def create_paca_apertura(payload: PacaAperturaCreate, db: Session = Depends(get_db)):
+    settings = _get_business_settings(db)
+    if not payload.lineas:
+        raise HTTPException(status_code=400, detail="Debes registrar al menos un producto clasificado")
+    bodega = db.query(Bodega).filter(Bodega.id == payload.bodega_id).first()
+    if not bodega:
+        raise HTTPException(status_code=404, detail="Bodega origen no encontrada")
+
+    bodega_destino_id = payload.bodega_destino_id or payload.bodega_id
+    bodega_destino = db.query(Bodega).filter(Bodega.id == bodega_destino_id).first()
+    if not bodega_destino:
+        raise HTTPException(status_code=404, detail="Bodega destino no encontrada")
+
+    moneda = _normalize_currency(payload.moneda)
+    tasa = _current_exchange_rate_value(db)
+
+    source_payload = payload.pacas_origen or [
+        {"producto_id": payload.paca_producto_id, "cantidad": payload.cantidad_pacas}
+    ]
+    source_qty_by_product: dict[int, Decimal] = {}
+    for source in source_payload:
+        product_id = int(source.producto_id if hasattr(source, "producto_id") else source["producto_id"])
+        quantity = Decimal(source.cantidad if hasattr(source, "cantidad") else source["cantidad"])
+        if quantity <= 0:
+            raise HTTPException(status_code=400, detail="Las cantidades de pacas origen deben ser mayores que cero")
+        source_qty_by_product[product_id] = source_qty_by_product.get(product_id, Decimal("0")) + quantity
+
+    if not source_qty_by_product:
+        raise HTTPException(status_code=400, detail="Debes registrar al menos una paca origen")
+
+    source_products = {
+        product.id: product
+        for product in db.query(Producto).filter(Producto.id.in_(list(source_qty_by_product.keys()))).all()
+    }
+    missing_sources = [product_id for product_id in source_qty_by_product if product_id not in source_products]
+    if missing_sources:
+        raise HTTPException(status_code=404, detail=f"Producto paca no encontrado: {missing_sources[0]}")
+
+    source_balances = _balances_by_bodega(db, [payload.bodega_id], list(source_qty_by_product.keys()))
+    source_rows: list[dict[str, object]] = []
+    costo_origen_usd = Decimal("0")
+    costo_origen_cs = Decimal("0")
+    cantidad_pacas = Decimal("0")
+    for product_id, quantity in source_qty_by_product.items():
+        product = source_products[product_id]
+        available = source_balances.get((product_id, payload.bodega_id), Decimal("0"))
+        if available < quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Stock insuficiente para abrir {product.cod_producto}. Disponible: {available}",
+            )
+        unit_usd, unit_cs = _product_cost_pair(product, tasa, settings)
+        subtotal_usd = unit_usd * quantity
+        subtotal_cs = unit_cs * quantity
+        costo_origen_usd += subtotal_usd
+        costo_origen_cs += subtotal_cs
+        cantidad_pacas += quantity
+        source_rows.append(
+            {
+                "producto": product,
+                "cantidad": quantity,
+                "unit_usd": unit_usd,
+                "unit_cs": unit_cs,
+                "subtotal_usd": subtotal_usd,
+                "subtotal_cs": subtotal_cs,
+            }
+        )
+
+    paca_producto = source_rows[0]["producto"]
+
+    result_rows: list[dict[str, object]] = []
+    valor_estimado_usd = Decimal("0")
+    valor_estimado_cs = Decimal("0")
+    total_qty = Decimal("0")
+    for line in payload.lineas:
+        producto = db.query(Producto).filter(Producto.id == line.producto_id).first()
+        if not producto:
+            raise HTTPException(status_code=404, detail=f"Producto resultante {line.producto_id} no encontrado")
+        cantidad = Decimal(line.cantidad)
+        if cantidad <= 0:
+            raise HTTPException(status_code=400, detail="Las cantidades resultantes deben ser mayores que cero")
+        precio_usd, precio_cs = _product_cost_pair(producto, tasa, settings)
+        subtotal_usd = precio_usd * cantidad
+        subtotal_cs = precio_cs * cantidad
+        valor_estimado_usd += subtotal_usd
+        valor_estimado_cs += subtotal_cs
+        total_qty += cantidad
+        result_rows.append(
+            {
+                "producto": producto,
+                "cantidad": cantidad,
+                "precio_usd": precio_usd,
+                "precio_cs": precio_cs,
+                "valor_usd": subtotal_usd,
+                "valor_cs": subtotal_cs,
+            }
+        )
+
+    egreso_tipo = _resolve_or_create_egreso_tipo(db, "Produccion de Abierta")
+    ingreso_tipo = _resolve_or_create_ingreso_tipo(db, "Produccion", False)
+
+    egreso = EgresoInventario(
+        tipo_id=egreso_tipo.id,
+        bodega_id=payload.bodega_id,
+        bodega_destino_id=bodega_destino.id,
+        fecha=payload.fecha,
+        moneda=moneda,
+        tasa_cambio=tasa,
+        observacion=f"Produccion de Abierta de {len(source_rows)} referencia(s) de paca. {payload.observacion or ''}".strip()[:300],
+        usuario_registro=payload.usuario_registro,
+        total_usd=costo_origen_usd,
+        total_cs=costo_origen_cs,
+    )
+    db.add(egreso)
+    db.flush()
+
+    for source in source_rows:
+        db.add(
+            EgresoItem(
+                egreso_id=egreso.id,
+                producto_id=source["producto"].id,
+                cantidad=source["cantidad"],
+                costo_unitario_usd=source["unit_usd"],
+                costo_unitario_cs=source["unit_cs"],
+                subtotal_usd=source["subtotal_usd"],
+                subtotal_cs=source["subtotal_cs"],
+            )
+        )
+
+    ingreso = IngresoInventario(
+        tipo_id=ingreso_tipo.id,
+        bodega_id=bodega_destino.id,
+        proveedor_id=None,
+        fecha=payload.fecha,
+        moneda=moneda,
+        tasa_cambio=tasa,
+        observacion=(
+            f"Resultado de Produccion de Abierta desde {bodega.name} hacia {bodega_destino.name}. "
+            f"Egreso #{egreso.id}. {len(source_rows)} referencia(s) de paca. {payload.observacion or ''}"
+        ).strip()[:300],
+        usuario_registro=payload.usuario_registro,
+        total_usd=valor_estimado_usd,
+        total_cs=valor_estimado_cs,
+    )
+    db.add(ingreso)
+    db.flush()
+
+    apertura = PacaApertura(
+        paca_producto_id=paca_producto.id,
+        bodega_id=payload.bodega_id,
+        bodega_destino_id=bodega_destino.id,
+        fecha=payload.fecha,
+        cantidad_pacas=cantidad_pacas,
+        moneda=moneda,
+        tasa_cambio=tasa,
+        costo_origen_usd=costo_origen_usd,
+        costo_origen_cs=costo_origen_cs,
+        valor_estimado_usd=valor_estimado_usd,
+        valor_estimado_cs=valor_estimado_cs,
+        diferencia_usd=valor_estimado_usd - costo_origen_usd,
+        diferencia_cs=valor_estimado_cs - costo_origen_cs,
+        estado="FINALIZADA",
+        observacion=payload.observacion,
+        usuario_registro=payload.usuario_registro,
+        ingreso_id=ingreso.id,
+        egreso_id=egreso.id,
+    )
+    db.add(apertura)
+    db.flush()
+
+    for source in source_rows:
+        db.add(
+            PacaAperturaOrigen(
+                apertura_id=apertura.id,
+                producto_id=source["producto"].id,
+                cantidad=source["cantidad"],
+                costo_unitario_usd=source["unit_usd"],
+                costo_unitario_cs=source["unit_cs"],
+                subtotal_usd=source["subtotal_usd"],
+                subtotal_cs=source["subtotal_cs"],
+            )
+        )
+
+    for row in result_rows:
+        cantidad = Decimal(row["cantidad"])
+        if valor_estimado_cs > 0:
+            ratio = Decimal(row["valor_cs"]) / valor_estimado_cs
+        else:
+            ratio = cantidad / total_qty if total_qty > 0 else Decimal("0")
+        costo_linea_cs = costo_origen_cs * ratio
+        costo_linea_usd = costo_origen_usd * ratio
+        costo_unit_cs = costo_linea_cs / cantidad if cantidad > 0 else Decimal("0")
+        costo_unit_usd = costo_linea_usd / cantidad if cantidad > 0 else Decimal("0")
+        producto = row["producto"]
+        db.add(
+            PacaAperturaLinea(
+                apertura_id=apertura.id,
+                producto_id=producto.id,
+                cantidad=cantidad,
+                precio_estimado_unitario_usd=row["precio_usd"],
+                precio_estimado_unitario_cs=row["precio_cs"],
+                valor_estimado_usd=row["valor_usd"],
+                valor_estimado_cs=row["valor_cs"],
+                costo_asignado_unitario_usd=costo_unit_usd,
+                costo_asignado_unitario_cs=costo_unit_cs,
+                costo_asignado_usd=costo_linea_usd,
+                costo_asignado_cs=costo_linea_cs,
+            )
+        )
+        db.add(
+            IngresoItem(
+                ingreso_id=ingreso.id,
+                producto_id=producto.id,
+                cantidad=cantidad,
+                costo_unitario_usd=row["precio_usd"],
+                costo_unitario_cs=row["precio_cs"],
+                subtotal_usd=row["valor_usd"],
+                subtotal_cs=row["valor_cs"],
+            )
+        )
+        _assign_product_cost(producto, row["precio_usd"], row["precio_cs"], settings)
+
+    for source in source_rows:
+        _rebuild_global_saldo(db, source["producto"].id)
+    for row in result_rows:
+        _rebuild_global_saldo(db, row["producto"].id)
+
+    db.commit()
+    return _load_paca_apertura(db, apertura.id)
+
+
+@router.get("/paca-aperturas", response_model=List[PacaAperturaResponse])
+def list_paca_aperturas(db: Session = Depends(get_db)):
+    return (
+        db.query(PacaApertura)
+        .options(
+            joinedload(PacaApertura.paca_producto),
+            joinedload(PacaApertura.bodega),
+            joinedload(PacaApertura.bodega_destino),
+            joinedload(PacaApertura.origenes).joinedload(PacaAperturaOrigen.producto),
+            joinedload(PacaApertura.lineas).joinedload(PacaAperturaLinea.producto),
+        )
+        .order_by(PacaApertura.id.desc())
+        .all()
+    )
+
+
+@router.get("/paca-aperturas/{apertura_id}/report", response_model=PacaAperturaResponse)
+def get_paca_apertura_report(apertura_id: int, db: Session = Depends(get_db)):
+    row = _load_paca_apertura(db, apertura_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Apertura de paca no encontrada")
+    return row
+
+
 @router.post("/ingresos", response_model=IngresoResponse, status_code=status.HTTP_201_CREATED)
 def create_ingreso(payload: IngresoCreate, db: Session = Depends(get_db)):
     settings = _get_business_settings(db)
@@ -1216,6 +1540,7 @@ def create_ingreso(payload: IngresoCreate, db: Session = Depends(get_db)):
 
     total_usd = Decimal("0")
     total_cs = Decimal("0")
+    allow_manual_cost = _is_compra_local_ingreso(ingreso_tipo.nombre)
 
     for item in payload.items:
         producto = db.query(Producto).filter(Producto.id == item.producto_id).first()
@@ -1223,16 +1548,21 @@ def create_ingreso(payload: IngresoCreate, db: Session = Depends(get_db)):
             raise HTTPException(status_code=404, detail=f"Producto {item.producto_id} no encontrado")
 
         cantidad = Decimal(item.cantidad)
-        costo_unitario = Decimal(item.costo_unitario)
-        if cantidad <= 0 or costo_unitario < 0:
-            raise HTTPException(status_code=400, detail="Cantidad y costo unitario deben ser validos")
+        if cantidad <= 0:
+            raise HTTPException(status_code=400, detail="La cantidad debe ser mayor que cero")
 
-        if moneda == "USD":
-            costo_usd = costo_unitario
-            costo_cs = costo_unitario * tasa
+        if allow_manual_cost:
+            costo_unitario = Decimal(item.costo_unitario)
+            if costo_unitario < 0:
+                raise HTTPException(status_code=400, detail="El costo unitario debe ser valido")
+            if moneda == "USD":
+                costo_usd = costo_unitario
+                costo_cs = costo_unitario * tasa
+            else:
+                costo_cs = costo_unitario
+                costo_usd = costo_unitario / tasa if tasa > 0 else Decimal("0")
         else:
-            costo_cs = costo_unitario
-            costo_usd = costo_unitario / tasa if tasa > 0 else Decimal("0")
+            costo_usd, costo_cs = _product_cost_pair(producto, tasa, settings)
 
         subtotal_usd = cantidad * costo_usd
         subtotal_cs = cantidad * costo_cs
@@ -1384,10 +1714,7 @@ def create_egreso(payload: EgresoCreate, db: Session = Depends(get_db)):
                 detail=f"Stock insuficiente para {producto.cod_producto}. Disponible: {existencia_actual}",
             )
 
-        if item.costo_unitario is not None:
-            costo_usd, costo_cs = _cost_pair_from_amount(Decimal(item.costo_unitario), moneda, tasa)
-        else:
-            costo_usd, costo_cs = _product_cost_pair(producto, tasa, settings)
+        costo_usd, costo_cs = _product_cost_pair(producto, tasa, settings)
 
         subtotal_usd = cantidad * costo_usd
         subtotal_cs = cantidad * costo_cs

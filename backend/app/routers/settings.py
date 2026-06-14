@@ -1,21 +1,38 @@
 from pathlib import Path
 import re
 from uuid import uuid4
+from datetime import date
+from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session, object_session
 
 from ..database import get_db
-from ..models.settings import BusinessSetting, CompanyEnvironment
+from ..models.settings import BusinessSetting, CompanyEnvironment, ExchangeRate
 from ..routers.auth import _get_user_from_token, bearer_scheme
-from ..schemas.settings import BusinessSettingResponse, CompanyEnvironmentResponse
+from ..schemas.settings import BusinessSettingResponse, CompanyEnvironmentResponse, ExchangeRateResponse
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 UPLOAD_DIR = BACKEND_DIR / "uploads" / "business"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+SALES_INTERFACE_LEGACY_MAP = {
+    "ropa": "ecommerce",
+    "zapatos": "ecommerce",
+    "restaurante": "supermarket",
+    "comestibles": "supermarket",
+    "ferreteria": "hardware",
+}
+SALES_INTERFACE_CODES = {"ecommerce", "supermarket", "hardware"}
+
+
+def _normalize_sales_interface(value: str | None) -> str:
+    code = (value or "ecommerce").strip().lower() or "ecommerce"
+    code = SALES_INTERFACE_LEGACY_MAP.get(code, code)
+    return code if code in SALES_INTERFACE_CODES else "ecommerce"
 
 
 def _get_or_create_business_settings(db: Session) -> BusinessSetting:
@@ -27,8 +44,8 @@ def _get_or_create_business_settings(db: Session) -> BusinessSetting:
         business_name="Orange Tec",
         legal_name="Orange Tec",
         trade_name="Orange Tec",
-        app_title="Orange Tec ERP",
-        sidebar_subtitle="ERP Empresarial",
+        app_title="Orange Tec Sistema empresarial",
+        sidebar_subtitle="Sistema empresarial",
         address="",
         ruc="",
         phone="",
@@ -36,7 +53,7 @@ def _get_or_create_business_settings(db: Session) -> BusinessSetting:
         email="",
         website="",
         theme_code="default",
-        sales_interface_code="ropa",
+        sales_interface_code="ecommerce",
         pricing_currency="CS",
     )
     db.add(settings)
@@ -55,9 +72,9 @@ def _save_upload(file: UploadFile | None, current_path: str | None) -> str | Non
     destination.write_bytes(file.file.read())
 
     if current_path:
-        relative_parts = current_path.removeprefix("/media/").split("/")
-        old_file = BACKEND_DIR / "uploads" / Path(*relative_parts[1:])
-        if old_file.exists() and old_file.is_file():
+        upload_root = (BACKEND_DIR / "uploads").resolve()
+        old_file = (upload_root / current_path.removeprefix("/media/")).resolve()
+        if old_file.is_relative_to(upload_root) and old_file.exists() and old_file.is_file():
             try:
                 old_file.unlink()
             except OSError:
@@ -72,8 +89,8 @@ def _serialize(settings: BusinessSetting) -> dict:
         "business_name": settings.trade_name or settings.business_name,
         "legal_name": settings.legal_name,
         "trade_name": settings.trade_name or settings.business_name,
-        "app_title": settings.app_title or f"{(settings.trade_name or settings.business_name or 'ERP')} ERP",
-        "sidebar_subtitle": settings.sidebar_subtitle or "ERP Empresarial",
+        "app_title": settings.app_title or f"{(settings.trade_name or settings.business_name or 'Sistema empresarial')} Sistema empresarial",
+        "sidebar_subtitle": settings.sidebar_subtitle or "Sistema empresarial",
         "address": settings.address,
         "ruc": settings.ruc,
         "phone": settings.phone,
@@ -81,12 +98,12 @@ def _serialize(settings: BusinessSetting) -> dict:
         "email": settings.email,
         "website": settings.website,
         "theme_code": settings.theme_code or "default",
-        "sales_interface_code": settings.sales_interface_code or "ropa",
+        "sales_interface_code": _normalize_sales_interface(settings.sales_interface_code),
         "pricing_currency": settings.pricing_currency or "CS",
         "logo_login": settings.logo_login,
-        "logo_sidebar": settings.logo_sidebar,
+        "logo_sidebar": settings.logo_sidebar or settings.logo_favicon,
         "logo_invoice": settings.logo_invoice,
-        "logo_favicon": settings.logo_favicon,
+        "logo_favicon": settings.logo_sidebar or settings.logo_favicon,
         "inventory_cs_only": bool(settings.inventory_cs_only),
         "weighted_inventory_enabled": bool(settings.weighted_inventory_enabled),
         "weighted_sales_enabled": bool(settings.weighted_sales_enabled),
@@ -128,6 +145,30 @@ def _validate_company_key(value: str) -> str:
     return key
 
 
+def _normalize_period_type(value: str | None) -> str:
+    period_type = (value or "daily").strip().lower() or "daily"
+    allowed = {"daily", "monthly", "quarterly"}
+    return period_type if period_type in allowed else "daily"
+
+
+def _parse_exchange_rate(value: str | Decimal | None) -> Decimal:
+    try:
+        rate = Decimal(str(value or "0"))
+    except (InvalidOperation, ValueError):
+        raise HTTPException(status_code=400, detail="La tasa de cambio no es valida") from None
+    if rate <= 0:
+        raise HTTPException(status_code=400, detail="La tasa de cambio debe ser mayor que cero")
+    return rate.quantize(Decimal("0.0001"))
+
+
+def _current_exchange_rate_query(db: Session):
+    return (
+        db.query(ExchangeRate)
+        .filter(ExchangeRate.is_active.is_(True), ExchangeRate.effective_date <= date.today())
+        .order_by(ExchangeRate.effective_date.desc(), ExchangeRate.id.desc())
+    )
+
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
@@ -148,6 +189,47 @@ def get_business_settings(
 ):
     settings = _get_or_create_business_settings(db)
     return _serialize(settings)
+
+
+@router.get("/exchange-rates/current", response_model=ExchangeRateResponse | None)
+def get_current_exchange_rate(db: Session = Depends(get_db)):
+    return _current_exchange_rate_query(db).first()
+
+
+@router.get("/exchange-rates", response_model=list[ExchangeRateResponse])
+def list_exchange_rates(
+    db: Session = Depends(get_db),
+    _current_user=Depends(get_current_user),
+):
+    return (
+        db.query(ExchangeRate)
+        .order_by(ExchangeRate.effective_date.desc(), ExchangeRate.id.desc())
+        .limit(60)
+        .all()
+    )
+
+
+@router.post("/exchange-rates", response_model=ExchangeRateResponse, status_code=status.HTTP_201_CREATED)
+def create_exchange_rate(
+    effective_date: date = Form(...),
+    period_type: str | None = Form("daily"),
+    rate: str = Form(...),
+    notes: str | None = Form(None),
+    is_active: str | None = Form("true"),
+    db: Session = Depends(get_db),
+    _current_user=Depends(get_current_user),
+):
+    exchange_rate = ExchangeRate(
+        effective_date=effective_date,
+        period_type=_normalize_period_type(period_type),
+        rate=_parse_exchange_rate(rate),
+        notes=(notes or "").strip(),
+        is_active=_to_bool(is_active),
+    )
+    db.add(exchange_rate)
+    db.commit()
+    db.refresh(exchange_rate)
+    return exchange_rate
 
 
 @router.put("/business", response_model=BusinessSettingResponse)
@@ -186,8 +268,8 @@ def update_business_settings(
     settings.business_name = trade_name_value
     settings.trade_name = trade_name_value
     settings.legal_name = (legal_name or "").strip() or trade_name_value
-    settings.app_title = (app_title or "").strip() or f"{trade_name_value} ERP"
-    settings.sidebar_subtitle = (sidebar_subtitle or "").strip() or "ERP Empresarial"
+    settings.app_title = (app_title or "").strip() or f"{trade_name_value} Sistema empresarial"
+    settings.sidebar_subtitle = (sidebar_subtitle or "").strip() or "Sistema empresarial"
     settings.address = (address or "").strip()
     settings.ruc = (ruc or "").strip()
     settings.phone = (phone or "").strip()
@@ -195,7 +277,7 @@ def update_business_settings(
     settings.email = (email or "").strip()
     settings.website = (website or "").strip()
     settings.theme_code = (theme_code or "default").strip() or "default"
-    settings.sales_interface_code = (sales_interface_code or "ropa").strip().lower() or "ropa"
+    settings.sales_interface_code = _normalize_sales_interface(sales_interface_code)
     currency_value = (pricing_currency or "CS").strip().upper() or "CS"
     settings.pricing_currency = "USD" if currency_value == "USD" else "CS"
     settings.inventory_cs_only = _to_bool(inventory_cs_only)
@@ -206,9 +288,10 @@ def update_business_settings(
     settings.price_auto_from_cost_enabled = _to_bool(price_auto_from_cost_enabled)
     settings.price_margin_percent = max(int(price_margin_percent or 0), 0)
     settings.logo_login = _save_upload(logo_login, settings.logo_login)
-    settings.logo_sidebar = _save_upload(logo_sidebar, settings.logo_sidebar)
+    commerce_logo = _save_upload(logo_sidebar or logo_favicon, settings.logo_sidebar or settings.logo_favicon)
+    settings.logo_sidebar = commerce_logo
     settings.logo_invoice = _save_upload(logo_invoice, settings.logo_invoice)
-    settings.logo_favicon = _save_upload(logo_favicon, settings.logo_favicon)
+    settings.logo_favicon = commerce_logo
 
     db.add(settings)
     db.commit()

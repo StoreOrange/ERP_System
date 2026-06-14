@@ -21,7 +21,9 @@ services:
       context: ./backend
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-1234}@db:5432/${POSTGRES_DB:-ERPDB}
-      FRONTEND_URL: http://127.0.0.1:${FRONTEND_PORT:-5174}
+      FRONTEND_URL: http://localhost:${FRONTEND_PORT:-5174}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-SUPER_SECRET_KEY_CHANGE_THIS}
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-480}
     command: sh -c "alembic upgrade head && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
     ports:
       - "${BACKEND_PORT:-8001}:8000"
@@ -36,7 +38,7 @@ services:
     build:
       context: ./frontend
     environment:
-      VITE_API_BASE_URL: http://127.0.0.1:${BACKEND_PORT:-8001}
+      VITE_API_BASE_URL: http://localhost:${BACKEND_PORT:-8001}
     command: npm run dev -- --host 0.0.0.0 --port 5173
     ports:
       - "${FRONTEND_PORT:-5174}:5173"

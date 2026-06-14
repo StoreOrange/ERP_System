@@ -122,6 +122,12 @@ class ProveedorCreate(ProveedorBase):
     pass
 
 
+class ProveedorUpdate(BaseModel):
+    nombre: Optional[str] = None
+    tipo: Optional[str] = None
+    activo: Optional[bool] = None
+
+
 class ProveedorResponse(ProveedorBase):
     model_config = ConfigDict(from_attributes=True)
 
@@ -280,7 +286,7 @@ class InventoryCatalogsResponse(BaseModel):
 class IngresoItemCreate(BaseModel):
     producto_id: int
     cantidad: Decimal
-    costo_unitario: Decimal
+    costo_unitario: Decimal = Field(default=Decimal("0"))
 
 
 class IngresoCreate(BaseModel):
@@ -426,6 +432,91 @@ class ProduccionInventarioResponse(BaseModel):
     producto_final: Optional[ProductoResponse] = None
     bodega: Optional[BodegaResponse] = None
     lineas: List[ProduccionInventarioLineaResponse]
+
+
+class PacaAperturaOrigenCreate(BaseModel):
+    producto_id: int
+    cantidad: Decimal
+
+
+class PacaAperturaLineaCreate(BaseModel):
+    producto_id: int
+    cantidad: Decimal
+    precio_estimado_unitario: Decimal = Field(default=Decimal("0"))
+
+
+class PacaAperturaCreate(BaseModel):
+    paca_producto_id: int
+    bodega_id: int
+    bodega_destino_id: Optional[int] = None
+    fecha: date
+    cantidad_pacas: Decimal = Field(default=Decimal("1"))
+    moneda: str = "CS"
+    tasa_cambio: Optional[Decimal] = None
+    observacion: Optional[str] = None
+    usuario_registro: Optional[str] = None
+    pacas_origen: List[PacaAperturaOrigenCreate] = Field(default_factory=list)
+    lineas: List[PacaAperturaLineaCreate]
+
+
+class PacaAperturaOrigenResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    producto_id: int
+    cantidad: Decimal
+    costo_unitario_usd: Decimal
+    costo_unitario_cs: Decimal
+    subtotal_usd: Decimal
+    subtotal_cs: Decimal
+    producto: Optional[ProductoResponse] = None
+
+
+class PacaAperturaLineaResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    producto_id: int
+    cantidad: Decimal
+    precio_estimado_unitario_usd: Decimal
+    precio_estimado_unitario_cs: Decimal
+    valor_estimado_usd: Decimal
+    valor_estimado_cs: Decimal
+    costo_asignado_unitario_usd: Decimal
+    costo_asignado_unitario_cs: Decimal
+    costo_asignado_usd: Decimal
+    costo_asignado_cs: Decimal
+    producto: Optional[ProductoResponse] = None
+
+
+class PacaAperturaResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    paca_producto_id: int
+    bodega_id: int
+    bodega_destino_id: Optional[int] = None
+    fecha: date
+    cantidad_pacas: Decimal
+    moneda: str
+    tasa_cambio: Optional[Decimal] = None
+    costo_origen_usd: Decimal
+    costo_origen_cs: Decimal
+    valor_estimado_usd: Decimal
+    valor_estimado_cs: Decimal
+    diferencia_usd: Decimal
+    diferencia_cs: Decimal
+    estado: str
+    observacion: Optional[str] = None
+    usuario_registro: Optional[str] = None
+    ingreso_id: Optional[int] = None
+    egreso_id: Optional[int] = None
+    created_at: Optional[datetime] = None
+    paca_producto: Optional[ProductoResponse] = None
+    bodega: Optional[BodegaResponse] = None
+    bodega_destino: Optional[BodegaResponse] = None
+    origenes: List[PacaAperturaOrigenResponse] = Field(default_factory=list)
+    lineas: List[PacaAperturaLineaResponse]
 
 
 class KardexMovimientoResponse(BaseModel):

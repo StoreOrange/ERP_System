@@ -65,6 +65,13 @@ export function createProveedor(payload) {
   });
 }
 
+export function updateProveedor(proveedorId, payload) {
+  return apiRequest(`/inventory/proveedores/${proveedorId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function createLinea(payload) {
   return apiRequest("/inventory/lineas", {
     method: "POST",
@@ -155,6 +162,25 @@ export function executeProduction(productionId) {
 
 export function fetchProductionReport(productionId) {
   return apiRequest(`/inventory/producciones/${productionId}/report`);
+}
+
+export function fetchPacaOpenings() {
+  return apiRequest("/inventory/paca-aperturas");
+}
+
+export function createPacaOpening(payload) {
+  return apiRequest("/inventory/paca-aperturas", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchPacaOpeningReport(openingId) {
+  return apiRequest(`/inventory/paca-aperturas/${openingId}/report`);
+}
+
+export function fetchProductBalances(productId) {
+  return apiRequest(`/inventory/products/${productId}/balances`);
 }
 
 export function searchInventoryProducts(query, bodegaId = null, priceList = 1) {

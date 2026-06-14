@@ -1,4 +1,6 @@
 from pydantic import BaseModel, Field
+from datetime import date, datetime
+from decimal import Decimal
 
 
 class CompanyEnvironmentBase(BaseModel):
@@ -10,6 +12,19 @@ class CompanyEnvironmentBase(BaseModel):
 class CompanyEnvironmentResponse(CompanyEnvironmentBase):
     id: int
     is_active: bool
+
+    class Config:
+        orm_mode = True
+
+
+class ExchangeRateResponse(BaseModel):
+    id: int
+    effective_date: date
+    period_type: str
+    rate: Decimal
+    notes: str | None = None
+    is_active: bool
+    created_at: datetime
 
     class Config:
         orm_mode = True
@@ -28,7 +43,7 @@ class BusinessSettingBase(BaseModel):
     email: str | None = None
     website: str | None = None
     theme_code: str | None = "default"
-    sales_interface_code: str | None = "ropa"
+    sales_interface_code: str | None = "ecommerce"
     pricing_currency: str | None = "CS"
     inventory_cs_only: bool = False
     weighted_inventory_enabled: bool = False

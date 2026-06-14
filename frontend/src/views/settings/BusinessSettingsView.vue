@@ -64,6 +64,10 @@
 
           <form class="settings-form" @submit.prevent="submitSettings">
             <div class="product-form-grid">
+              <div class="settings-form-section field-span-4">
+                <span>Identidad fiscal y comercial</span>
+              </div>
+
               <label class="field-group field-span-2">
                 <span>Razon social</span>
                 <input v-model="settings.legal_name" class="form-control" type="text" />
@@ -88,6 +92,10 @@
                 <span>RUC</span>
                 <input v-model="settings.ruc" class="form-control" type="text" />
               </label>
+
+              <div class="settings-form-section field-span-4">
+                <span>Contacto visible en facturas y tickets POS</span>
+              </div>
 
               <label class="field-group">
                 <span>Telefono</span>
@@ -120,6 +128,7 @@
                   <option value="default">Default</option>
                   <option value="corporate">Corporate</option>
                   <option value="odoo">Odoo</option>
+                  <option value="skethy">Sketchy</option>
                 </select>
               </label>
 
@@ -142,6 +151,7 @@
             <div class="settings-logo-grid">
               <div v-for="field in logoFields" :key="field.key" class="settings-logo-card">
                 <span class="settings-logo-label">{{ field.label }}</span>
+                <small v-if="field.help" class="settings-logo-help">{{ field.help }}</small>
                 <div class="settings-logo-preview">
                   <img v-if="previewFor(field)" :src="previewFor(field)" :alt="field.label" />
                   <div v-else class="settings-logo-empty">
@@ -268,6 +278,274 @@
           </div>
         </article>
 
+        <article v-else-if="currentSection === 'exchange-rates'" class="panel-card">
+          <div class="panel-head">
+            <div>
+              <span class="products-section-kicker">Moneda y conversiones</span>
+              <h3>Tasa de cambio</h3>
+              <p class="panel-text">
+                Registra la tasa vigente para ventas, inventario y procesos que convierten USD/C$.
+              </p>
+            </div>
+            <Tag
+              :severity="currentExchangeRate ? 'success' : 'warn'"
+              :value="currentExchangeRate ? `Vigente C$ ${formatRate(currentExchangeRate.rate)}` : 'Sin tasa vigente'"
+            />
+          </div>
+
+          <div class="exchange-rate-layout">
+            <form class="settings-env-form exchange-rate-form" @submit.prevent="submitExchangeRate">
+              <div class="product-form-grid">
+                <label class="field-group">
+                  <span>Fecha efectiva</span>
+                  <input v-model="exchangeRateForm.effective_date" class="form-control" type="date" required />
+                </label>
+
+                <label class="field-group">
+                  <span>Periodicidad</span>
+                  <select v-model="exchangeRateForm.period_type" class="form-control">
+                    <option value="daily">Diaria</option>
+                    <option value="monthly">Mensual</option>
+                    <option value="quarterly">Trimestral</option>
+                  </select>
+                </label>
+
+                <label class="field-group">
+                  <span>1 USD equivale a C$</span>
+                  <input
+                    v-model="exchangeRateForm.rate"
+                    class="form-control"
+                    type="number"
+                    min="0.0001"
+                    step="0.0001"
+                    placeholder="36.7500"
+                    required
+                  />
+                </label>
+
+                <label class="field-group field-span-2">
+                  <span>Nota</span>
+                  <input
+                    v-model="exchangeRateForm.notes"
+                    class="form-control"
+                    placeholder="Ej. tasa oficial del dia, tasa comercial mensual..."
+                  />
+                </label>
+              </div>
+
+              <div class="product-form-actions">
+                <Button type="button" severity="secondary" variant="outlined" @click="resetExchangeRateForm">
+                  Limpiar
+                </Button>
+                <Button :disabled="exchangeRateLoading" type="submit">
+                  {{ exchangeRateLoading ? "Guardando..." : "Registrar tasa" }}
+                </Button>
+              </div>
+            </form>
+
+            <div class="exchange-rate-list">
+              <div v-if="!exchangeRates.length" class="empty-state">No hay tasas registradas.</div>
+              <template v-else>
+                <article
+                  v-for="rate in exchangeRates"
+                  :key="rate.id"
+                  class="exchange-rate-card"
+                  :class="{ active: currentExchangeRate?.id === rate.id }"
+                >
+                  <div>
+                    <strong>C$ {{ formatRate(rate.rate) }}</strong>
+                    <span>{{ formatPeriod(rate.period_type) }} desde {{ rate.effective_date }}</span>
+                    <small v-if="rate.notes">{{ rate.notes }}</small>
+                  </div>
+                  <Tag :severity="currentExchangeRate?.id === rate.id ? 'success' : 'contrast'" :value="currentExchangeRate?.id === rate.id ? 'Vigente' : 'Historial'" />
+                </article>
+              </template>
+            </div>
+          </div>
+        </article>
+
+        <article v-else-if="currentSection === 'third-parties'" class="panel-card">
+          <div class="panel-head">
+            <div>
+              <span class="products-section-kicker">Catalogos comerciales</span>
+              <h3>Clientes, vendedores y proveedores</h3>
+              <p class="panel-text">
+                Administra los terceros usados por ventas, compras e inventario desde una sola configuracion.
+              </p>
+            </div>
+            <Tag severity="info" :value="`${customers.length + vendors.length + providers.length} registros`" />
+          </div>
+
+          <div class="third-party-tabs">
+            <button
+              v-for="tab in thirdPartyTabs"
+              :key="tab.key"
+              type="button"
+              :class="{ active: activeThirdPartyTab === tab.key }"
+              @click="activeThirdPartyTab = tab.key"
+            >
+              <i class="bi" :class="tab.icon"></i>
+              <span>{{ tab.label }}</span>
+            </button>
+          </div>
+
+          <div v-if="activeThirdPartyTab === 'customers'" class="third-party-layout">
+            <form class="settings-env-form" @submit.prevent="submitCustomer">
+              <div class="product-form-grid">
+                <label class="field-group field-span-2">
+                  <span>Nombre del cliente</span>
+                  <input v-model.trim="customerForm.nombre" class="form-control" placeholder="Cliente general o empresa" required />
+                </label>
+                <label class="field-group">
+                  <span>RUC / Cedula</span>
+                  <input v-model.trim="customerForm.identificacion" class="form-control" />
+                </label>
+                <label class="field-group">
+                  <span>Telefono</span>
+                  <input v-model.trim="customerForm.telefono" class="form-control" />
+                </label>
+                <label class="field-group">
+                  <span>Correo</span>
+                  <input v-model.trim="customerForm.email" class="form-control" type="email" />
+                </label>
+                <label class="field-group">
+                  <span>Tipo</span>
+                  <input v-model.trim="customerForm.tipo" class="form-control" placeholder="Retail, mayorista..." />
+                </label>
+                <label class="field-group field-span-2">
+                  <span>Direccion</span>
+                  <input v-model.trim="customerForm.direccion" class="form-control" />
+                </label>
+                <label class="products-checkbox">
+                  <input v-model="customerForm.activo" type="checkbox" />
+                  <span>Activo</span>
+                </label>
+              </div>
+              <div class="product-form-actions">
+                <Button type="button" severity="secondary" variant="outlined" @click="resetCustomerForm">Limpiar</Button>
+                <Button :disabled="thirdPartyLoading" type="submit">{{ customerForm.id ? "Actualizar cliente" : "Crear cliente" }}</Button>
+              </div>
+            </form>
+
+            <div class="third-party-list">
+              <article v-for="customer in customers" :key="customer.id" class="third-party-card">
+                <div>
+                  <strong>{{ customer.nombre }}</strong>
+                  <span>{{ customer.identificacion || customer.telefono || "Sin documento" }}</span>
+                </div>
+                <div class="third-party-actions">
+                  <Tag :severity="customer.activo ? 'success' : 'contrast'" :value="customer.activo ? 'Activo' : 'Inactivo'" />
+                  <Button size="small" severity="secondary" variant="outlined" label="Editar" @click="editCustomer(customer)" />
+                </div>
+              </article>
+              <div v-if="!customers.length" class="empty-state">No hay clientes registrados.</div>
+            </div>
+          </div>
+
+          <div v-else-if="activeThirdPartyTab === 'vendors'" class="third-party-layout">
+            <form class="settings-env-form" @submit.prevent="submitVendor">
+              <div class="product-form-grid">
+                <label class="field-group">
+                  <span>Codigo</span>
+                  <input v-model.trim="vendorForm.code" class="form-control" placeholder="VEN-PISO" required />
+                </label>
+                <label class="field-group field-span-2">
+                  <span>Nombre del vendedor</span>
+                  <input v-model.trim="vendorForm.nombre" class="form-control" placeholder="Vendedor de piso" required />
+                </label>
+                <label class="field-group">
+                  <span>Usuario vinculado</span>
+                  <select v-model="vendorForm.user_id" class="form-control">
+                    <option :value="null">Sin usuario</option>
+                    <option v-for="user in users" :key="user.id" :value="user.id">{{ user.full_name || user.email }}</option>
+                  </select>
+                </label>
+                <label class="field-group">
+                  <span>Sucursal</span>
+                  <select v-model="vendorForm.sucursal_id" class="form-control">
+                    <option :value="null">Sin sucursal</option>
+                    <option v-for="branch in branches" :key="branch.id" :value="branch.id">{{ branch.name }}</option>
+                  </select>
+                </label>
+                <label class="field-group">
+                  <span>Bodega</span>
+                  <select v-model="vendorForm.bodega_id" class="form-control">
+                    <option :value="null">Sin bodega fija</option>
+                    <option v-for="bodega in bodegas" :key="bodega.id" :value="bodega.id">{{ bodega.name }}</option>
+                  </select>
+                </label>
+                <label class="field-group">
+                  <span>Telefono</span>
+                  <input v-model.trim="vendorForm.telefono" class="form-control" />
+                </label>
+                <label class="field-group">
+                  <span>Correo</span>
+                  <input v-model.trim="vendorForm.email" class="form-control" type="email" />
+                </label>
+                <label class="products-checkbox">
+                  <input v-model="vendorForm.activo" type="checkbox" />
+                  <span>Activo</span>
+                </label>
+              </div>
+              <div class="product-form-actions">
+                <Button type="button" severity="secondary" variant="outlined" @click="resetVendorForm">Limpiar</Button>
+                <Button :disabled="thirdPartyLoading" type="submit">{{ vendorForm.id ? "Actualizar vendedor" : "Crear vendedor" }}</Button>
+              </div>
+            </form>
+
+            <div class="third-party-list">
+              <article v-for="vendor in vendors" :key="vendor.id" class="third-party-card">
+                <div>
+                  <strong>{{ vendor.nombre }}</strong>
+                  <span>{{ vendor.code }} · {{ vendor.bodega_name || "Sin bodega fija" }}</span>
+                </div>
+                <div class="third-party-actions">
+                  <Tag :severity="vendor.activo ? 'success' : 'contrast'" :value="vendor.activo ? 'Activo' : 'Inactivo'" />
+                  <Button size="small" severity="secondary" variant="outlined" label="Editar" @click="editVendor(vendor)" />
+                </div>
+              </article>
+              <div v-if="!vendors.length" class="empty-state">No hay vendedores registrados.</div>
+            </div>
+          </div>
+
+          <div v-else class="third-party-layout">
+            <form class="settings-env-form" @submit.prevent="submitProvider">
+              <div class="product-form-grid">
+                <label class="field-group field-span-2">
+                  <span>Nombre del proveedor</span>
+                  <input v-model.trim="providerForm.nombre" class="form-control" placeholder="Proveedor local" required />
+                </label>
+                <label class="field-group">
+                  <span>Tipo</span>
+                  <input v-model.trim="providerForm.tipo" class="form-control" placeholder="Local, internacional..." />
+                </label>
+                <label class="products-checkbox">
+                  <input v-model="providerForm.activo" type="checkbox" />
+                  <span>Activo</span>
+                </label>
+              </div>
+              <div class="product-form-actions">
+                <Button type="button" severity="secondary" variant="outlined" @click="resetProviderForm">Limpiar</Button>
+                <Button :disabled="thirdPartyLoading" type="submit">{{ providerForm.id ? "Actualizar proveedor" : "Crear proveedor" }}</Button>
+              </div>
+            </form>
+
+            <div class="third-party-list">
+              <article v-for="provider in providers" :key="provider.id" class="third-party-card">
+                <div>
+                  <strong>{{ provider.nombre }}</strong>
+                  <span>{{ provider.tipo || "Proveedor" }}</span>
+                </div>
+                <div class="third-party-actions">
+                  <Tag :severity="provider.activo ? 'success' : 'contrast'" :value="provider.activo ? 'Activo' : 'Inactivo'" />
+                  <Button size="small" severity="secondary" variant="outlined" label="Editar" @click="editProvider(provider)" />
+                </div>
+              </article>
+              <div v-if="!providers.length" class="empty-state">No hay proveedores registrados.</div>
+            </div>
+          </div>
+        </article>
+
         <article v-else-if="currentSection === 'policies'" class="panel-card">
           <div class="panel-head">
             <div>
@@ -348,7 +626,7 @@
                 <div class="settings-env-head">
                   <div>
                     <strong>{{ option.label }}</strong>
-                    <span>{{ option.code }}</span>
+                    <span>{{ option.description }}</span>
                   </div>
                   <Tag
                     :severity="settings.sales_interface_code === option.code ? 'success' : 'contrast'"
@@ -376,12 +654,18 @@ import { computed, onMounted, reactive, ref } from "vue";
 import Button from "primevue/button";
 import Tag from "primevue/tag";
 
+import { createVendor, fetchAccessUsers, fetchBranches, fetchVendors, updateVendor } from "../../services/access";
+import { createProveedor, fetchInventoryCatalogs, updateProveedor } from "../../services/inventory";
+import { createCustomer, fetchCustomers, updateCustomer } from "../../services/sales";
 import {
   activateCompanyEnvironment,
   buildAssetUrl,
+  createExchangeRate,
   createCompanyEnvironment,
   fetchBusinessSettings,
   fetchCompanyEnvironments,
+  fetchCurrentExchangeRate,
+  fetchExchangeRates,
   saveBusinessSettings,
   updateCompanyEnvironment,
 } from "../../services/settings";
@@ -400,6 +684,18 @@ const sections = [
     icon: "bi-buildings",
   },
   {
+    key: "exchange-rates",
+    label: "Tasa de cambio",
+    caption: "Registro diario, mensual o trimestral",
+    icon: "bi-currency-exchange",
+  },
+  {
+    key: "third-parties",
+    label: "Terceros",
+    caption: "Clientes, vendedores y proveedores",
+    icon: "bi-person-lines-fill",
+  },
+  {
     key: "policies",
     label: "Politicas del negocio",
     caption: "Reglas de inventario, ventas y costos",
@@ -413,18 +709,38 @@ const sections = [
   },
 ];
 
+const thirdPartyTabs = [
+  { key: "customers", label: "Clientes", icon: "bi-people" },
+  { key: "vendors", label: "Vendedores", icon: "bi-person-badge" },
+  { key: "providers", label: "Proveedores", icon: "bi-truck" },
+];
+
 const salesInterfaceOptions = [
-  { code: "ropa", label: "Terminal de Venta Empresarial" },
-  { code: "zapatos", label: "POS Tienda de Zapatos" },
-  { code: "restaurante", label: "POS Restaurante" },
-  { code: "comestibles", label: "POS Comestibles" },
+  {
+    code: "ecommerce",
+    label: "Vista ecommerce elegante",
+    description: "Lista limpia para comercios de catalogo, ropa, pacas y venta asistida.",
+  },
+  {
+    code: "supermarket",
+    label: "Vista supermercado en grilla",
+    description: "Tarjetas rapidas para tocar, cargar productos y facturar en mostrador.",
+  },
+  {
+    code: "hardware",
+    label: "Vista ferreteria / busqueda general",
+    description: "Filas densas por codigo, barra, stock y precio para busqueda tecnica.",
+  },
 ];
 
 const logoFields = [
   { key: "logo_login", label: "Logo de login" },
-  { key: "logo_sidebar", label: "Logo del panel principal" },
+  {
+    key: "logo_sidebar",
+    label: "Logo del comercio",
+    help: "Se muestra en el menu lateral y tambien se usa como favicon del navegador.",
+  },
   { key: "logo_invoice", label: "Logo de factura" },
-  { key: "logo_favicon", label: "Logo de favicon" },
 ];
 
 const policyFields = [
@@ -439,20 +755,29 @@ const policyFields = [
 const currentSection = ref("business");
 const loading = ref(false);
 const environmentLoading = ref(false);
+const exchangeRateLoading = ref(false);
+const thirdPartyLoading = ref(false);
 const error = ref("");
 const success = ref("");
 const environments = ref([]);
+const exchangeRates = ref([]);
+const currentExchangeRate = ref(null);
+const activeThirdPartyTab = ref("customers");
+const customers = ref([]);
+const vendors = ref([]);
+const providers = ref([]);
+const users = ref([]);
+const branches = ref([]);
+const bodegas = ref([]);
 const files = reactive({
   logo_login: null,
   logo_sidebar: null,
   logo_invoice: null,
-  logo_favicon: null,
 });
 const previews = reactive({
   logo_login: "",
   logo_sidebar: "",
   logo_invoice: "",
-  logo_favicon: "",
 });
 const settings = reactive({
   business_name: "",
@@ -467,7 +792,7 @@ const settings = reactive({
   email: "",
   website: "",
   theme_code: "default",
-  sales_interface_code: "ropa",
+  sales_interface_code: "ecommerce",
   pricing_currency: "CS",
   logo_login: "",
   logo_sidebar: "",
@@ -488,6 +813,15 @@ const environmentForm = reactive({
   database_url: "",
   activate: false,
 });
+const exchangeRateForm = reactive({
+  effective_date: new Date().toISOString().slice(0, 10),
+  period_type: "daily",
+  rate: "",
+  notes: "",
+});
+const customerForm = reactive(getEmptyCustomerForm());
+const vendorForm = reactive(getEmptyVendorForm());
+const providerForm = reactive(getEmptyProviderForm());
 
 const enabledPolicies = computed(
   () =>
@@ -507,7 +841,7 @@ function applySettings(payload) {
   settings.email = payload.email || "";
   settings.website = payload.website || "";
   settings.theme_code = payload.theme_code || "default";
-  settings.sales_interface_code = payload.sales_interface_code || "ropa";
+  settings.sales_interface_code = payload.sales_interface_code || "ecommerce";
   settings.pricing_currency = payload.pricing_currency || "CS";
   settings.logo_login = payload.logo_login || "";
   settings.logo_sidebar = payload.logo_sidebar || "";
@@ -550,6 +884,206 @@ function editEnvironment(environment) {
   currentSection.value = "environment";
 }
 
+function resetExchangeRateForm() {
+  exchangeRateForm.effective_date = new Date().toISOString().slice(0, 10);
+  exchangeRateForm.period_type = "daily";
+  exchangeRateForm.rate = "";
+  exchangeRateForm.notes = "";
+}
+
+function formatRate(value) {
+  return new Intl.NumberFormat("es-NI", {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  }).format(Number(value || 0));
+}
+
+function formatPeriod(value) {
+  const labels = {
+    daily: "Diaria",
+    monthly: "Mensual",
+    quarterly: "Trimestral",
+  };
+  return labels[value] || "Diaria";
+}
+
+function getEmptyCustomerForm() {
+  return { id: null, nombre: "", telefono: "", identificacion: "", direccion: "", email: "", tipo: "", activo: true };
+}
+
+function getEmptyVendorForm() {
+  return {
+    id: null,
+    code: "",
+    nombre: "Vendedor de piso",
+    user_id: null,
+    sucursal_id: null,
+    bodega_id: null,
+    telefono: "",
+    email: "",
+    meta_ventas: null,
+    activo: true,
+  };
+}
+
+function getEmptyProviderForm() {
+  return { id: null, nombre: "", tipo: "", activo: true };
+}
+
+function nextVendorCode() {
+  if (!vendors.value.length) return "VEN-PISO";
+  return `VEN-${String(vendors.value.length + 1).padStart(3, "0")}`;
+}
+
+function normalizeNullableId(value) {
+  if (value === "" || value === undefined || value === null) return null;
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function resetCustomerForm() {
+  Object.assign(customerForm, getEmptyCustomerForm());
+}
+
+function resetVendorForm() {
+  Object.assign(vendorForm, getEmptyVendorForm(), { code: nextVendorCode() });
+}
+
+function resetProviderForm() {
+  Object.assign(providerForm, getEmptyProviderForm());
+}
+
+function editCustomer(customer) {
+  Object.assign(customerForm, getEmptyCustomerForm(), customer);
+  activeThirdPartyTab.value = "customers";
+}
+
+function editVendor(vendor) {
+  Object.assign(vendorForm, getEmptyVendorForm(), {
+    ...vendor,
+    user_id: vendor.user_id ?? null,
+    sucursal_id: vendor.sucursal_id ?? null,
+    bodega_id: vendor.bodega_id ?? null,
+  });
+  activeThirdPartyTab.value = "vendors";
+}
+
+function editProvider(provider) {
+  Object.assign(providerForm, getEmptyProviderForm(), provider);
+  activeThirdPartyTab.value = "providers";
+}
+
+async function loadThirdParties() {
+  try {
+    const [customerData, vendorData, userData, branchData, catalogData] = await Promise.all([
+      fetchCustomers("", true),
+      fetchVendors(),
+      fetchAccessUsers(),
+      fetchBranches(),
+      fetchInventoryCatalogs(),
+    ]);
+    customers.value = Array.isArray(customerData) ? customerData : [];
+    vendors.value = Array.isArray(vendorData) ? vendorData : [];
+    users.value = Array.isArray(userData) ? userData : [];
+    branches.value = Array.isArray(branchData) ? branchData : [];
+    providers.value = Array.isArray(catalogData?.proveedores) ? catalogData.proveedores : [];
+    bodegas.value = Array.isArray(catalogData?.bodegas) ? catalogData.bodegas : [];
+    if (!vendorForm.id && !vendorForm.code) {
+      resetVendorForm();
+    }
+  } catch (err) {
+    error.value = err.message || "No se pudieron cargar los catalogos de terceros";
+  }
+}
+
+async function submitCustomer() {
+  thirdPartyLoading.value = true;
+  error.value = "";
+  success.value = "";
+  try {
+    const payload = {
+      nombre: customerForm.nombre,
+      telefono: customerForm.telefono,
+      identificacion: customerForm.identificacion,
+      direccion: customerForm.direccion,
+      email: customerForm.email,
+      tipo: customerForm.tipo,
+      activo: Boolean(customerForm.activo),
+    };
+    if (customerForm.id) {
+      await updateCustomer(customerForm.id, payload);
+      success.value = "Cliente actualizado.";
+    } else {
+      await createCustomer(payload);
+      success.value = "Cliente creado.";
+    }
+    await loadThirdParties();
+    resetCustomerForm();
+  } catch (err) {
+    error.value = err.message || "No se pudo guardar el cliente";
+  } finally {
+    thirdPartyLoading.value = false;
+  }
+}
+
+async function submitVendor() {
+  thirdPartyLoading.value = true;
+  error.value = "";
+  success.value = "";
+  try {
+    const payload = {
+      code: vendorForm.code,
+      nombre: vendorForm.nombre,
+      user_id: normalizeNullableId(vendorForm.user_id),
+      sucursal_id: normalizeNullableId(vendorForm.sucursal_id),
+      bodega_id: normalizeNullableId(vendorForm.bodega_id),
+      telefono: vendorForm.telefono,
+      email: vendorForm.email,
+      meta_ventas: vendorForm.meta_ventas,
+      activo: Boolean(vendorForm.activo),
+    };
+    if (vendorForm.id) {
+      await updateVendor(vendorForm.id, payload);
+      success.value = "Vendedor actualizado.";
+    } else {
+      await createVendor(payload);
+      success.value = "Vendedor creado.";
+    }
+    await loadThirdParties();
+    resetVendorForm();
+  } catch (err) {
+    error.value = err.message || "No se pudo guardar el vendedor";
+  } finally {
+    thirdPartyLoading.value = false;
+  }
+}
+
+async function submitProvider() {
+  thirdPartyLoading.value = true;
+  error.value = "";
+  success.value = "";
+  try {
+    const payload = {
+      nombre: providerForm.nombre,
+      tipo: providerForm.tipo,
+      activo: Boolean(providerForm.activo),
+    };
+    if (providerForm.id) {
+      await updateProveedor(providerForm.id, payload);
+      success.value = "Proveedor actualizado.";
+    } else {
+      await createProveedor(payload);
+      success.value = "Proveedor creado.";
+    }
+    await loadThirdParties();
+    resetProviderForm();
+  } catch (err) {
+    error.value = err.message || "No se pudo guardar el proveedor";
+  } finally {
+    thirdPartyLoading.value = false;
+  }
+}
+
 async function loadSettings() {
   error.value = "";
   success.value = "";
@@ -567,6 +1101,19 @@ async function loadEnvironments() {
     environments.value = await fetchCompanyEnvironments();
   } catch (err) {
     error.value = err.message || "No se pudieron cargar los entornos";
+  }
+}
+
+async function loadExchangeRates() {
+  try {
+    const [currentRate, rates] = await Promise.all([
+      fetchCurrentExchangeRate(),
+      fetchExchangeRates(),
+    ]);
+    currentExchangeRate.value = currentRate || null;
+    exchangeRates.value = Array.isArray(rates) ? rates : [];
+  } catch (err) {
+    error.value = err.message || "No se pudieron cargar las tasas de cambio";
   }
 }
 
@@ -589,7 +1136,7 @@ async function submitSettings() {
     formData.append("email", settings.email || "");
     formData.append("website", settings.website || "");
     formData.append("theme_code", settings.theme_code || "default");
-    formData.append("sales_interface_code", settings.sales_interface_code || "ropa");
+    formData.append("sales_interface_code", settings.sales_interface_code || "ecommerce");
     formData.append("pricing_currency", settings.pricing_currency || "CS");
     formData.append("inventory_cs_only", String(Boolean(settings.inventory_cs_only)));
     formData.append("weighted_inventory_enabled", String(Boolean(settings.weighted_inventory_enabled)));
@@ -678,8 +1225,39 @@ async function activateEnvironment(environmentId) {
   }
 }
 
+async function submitExchangeRate() {
+  exchangeRateLoading.value = true;
+  error.value = "";
+  success.value = "";
+
+  try {
+    const formData = new FormData();
+    formData.append("effective_date", exchangeRateForm.effective_date || "");
+    formData.append("period_type", exchangeRateForm.period_type || "daily");
+    formData.append("rate", String(exchangeRateForm.rate || ""));
+    formData.append("notes", exchangeRateForm.notes || "");
+    formData.append("is_active", "true");
+
+    await createExchangeRate(formData);
+    await loadExchangeRates();
+    resetExchangeRateForm();
+    success.value = "Tasa de cambio registrada y disponible para conversiones.";
+    setTimeout(() => {
+      if (success.value) {
+        success.value = "";
+      }
+    }, 3500);
+  } catch (err) {
+    error.value = err.message || "No se pudo registrar la tasa de cambio";
+  } finally {
+    exchangeRateLoading.value = false;
+  }
+}
+
 onMounted(async () => {
   await loadSettings();
   await loadEnvironments();
+  await loadExchangeRates();
+  await loadThirdParties();
 });
 </script>

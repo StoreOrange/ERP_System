@@ -34,12 +34,15 @@ export function applyBusinessBranding(settings) {
 
   const businessLabel = settings.trade_name || settings.business_name;
   const titleLabel = settings.app_title || businessLabel;
+  const themeCode = settings.theme_code || "default";
+
+  document.documentElement.dataset.erpTheme = themeCode;
 
   document.title = titleLabel
-    ? `${titleLabel} | ERP`
-    : "ERP System";
+    ? `${titleLabel} | Sistema empresarial`
+    : "Sistema empresarial";
 
-  const faviconHref = buildAssetUrl(settings.logo_favicon);
+  const faviconHref = buildAssetUrl(settings.logo_sidebar || settings.logo_favicon);
   if (!faviconHref) {
     return;
   }
@@ -99,5 +102,20 @@ export async function updateCompanyEnvironment(environmentId, payload) {
 export async function activateCompanyEnvironment(environmentId) {
   return apiRequest(`/settings/environments/${environmentId}/activate`, {
     method: "PATCH",
+  });
+}
+
+export async function fetchCurrentExchangeRate() {
+  return apiRequest("/settings/exchange-rates/current");
+}
+
+export async function fetchExchangeRates() {
+  return apiRequest("/settings/exchange-rates");
+}
+
+export async function createExchangeRate(payload) {
+  return apiRequest("/settings/exchange-rates", {
+    method: "POST",
+    body: payload,
   });
 }

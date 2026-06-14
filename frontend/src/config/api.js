@@ -1,5 +1,5 @@
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8010";
 
 export async function apiRequest(path, options = {}) {
   const token = localStorage.getItem("token");
@@ -30,7 +30,10 @@ export async function apiRequest(path, options = {}) {
     const message =
       typeof payload === "object" && payload !== null
         ? payload.detail || payload.message || "Error en la solicitud"
-        : "Error en la solicitud";
+        : payload || "Error en la solicitud";
+    if (response.status === 404) {
+      throw new Error(`Ruta no encontrada: ${API_BASE_URL}${path}`);
+    }
     throw new Error(message);
   }
 

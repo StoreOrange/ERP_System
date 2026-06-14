@@ -1,4 +1,4 @@
-# API ERP System
+# API del sistema de planificacion de recursos empresariales
 
 Ultima verificacion OpenAPI: 2026-06-02
 
@@ -11,7 +11,8 @@ Swagger UI: `http://127.0.0.1:8001/docs`
 - Operaciones OpenAPI publicadas: 43.
 - Framework: FastAPI.
 - Autenticacion: JWT Bearer.
-- Expiracion de token: 60 minutos.
+- Expiracion de token: configurable mediante
+  `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`; desarrollo usa 480 minutos (8 horas).
 
 ## Metodos generales
 
@@ -168,7 +169,7 @@ Flujo:
 | --- | --- | --- | --- |
 | `GET` | `/settings/business/public` | No | Branding publico |
 | `GET` | `/settings/business` | Si | Configuracion completa |
-| `PUT` | `/settings/business` | Si | Actualiza configuracion y logos |
+| `PUT` | `/settings/business` | Si | Actualiza configuracion y logos; `logo_sidebar` tambien sincroniza el favicon |
 
 `PUT /settings/business` recibe `multipart/form-data`.
 
@@ -180,6 +181,17 @@ Flujo:
 | `POST` | `/settings/environments` | Si | Crea entorno |
 | `PUT` | `/settings/environments/{environment_id}` | Si | Actualiza entorno |
 | `PATCH` | `/settings/environments/{environment_id}/activate` | Si | Activa uno y desactiva los demas |
+
+## Tasas de cambio
+
+| Metodo | Ruta | Autenticacion | Descripcion |
+| --- | --- | --- | --- |
+| `GET` | `/settings/exchange-rates/current` | No | Tasa vigente por fecha efectiva |
+| `GET` | `/settings/exchange-rates` | Si | Historial reciente de tasas |
+| `POST` | `/settings/exchange-rates` | Si | Registra tasa diaria, mensual o trimestral |
+
+`POST /settings/exchange-rates` recibe `multipart/form-data` con
+`effective_date`, `period_type`, `rate`, `notes` e `is_active`.
 
 ## Funciones internas relevantes
 
@@ -216,18 +228,28 @@ Flujo:
 | `_serialize()` | Construye respuesta empresarial |
 | `_validate_company_key()` | Valida clave `[a-z0-9_]+` |
 
+### Ventas POS
+
+| Metodo | Ruta | Descripcion |
+| --- | --- | --- |
+| `GET` | `/sales-api/invoices/next` | Devuelve el siguiente consecutivo POS |
+| `GET` | `/sales-api/invoices` | Lista las ultimas facturas POS |
+| `POST` | `/sales-api/invoices` | Registra factura, items, pagos y egreso de inventario |
+
+`POST /sales-api/invoices` valida stock por bodega, exige pago completo para
+ventas de contado, permite saldo para credito y genera el egreso tipo `Venta`
+en la misma transaccion.
+
 ## Endpoints no implementados
 
 No existen endpoints persistentes para:
 
 - Clientes.
 - Vendedores.
-- Facturas.
-- Detalles de venta.
-- Pagos.
 - Bancos o cuentas.
 - Caja.
 - Cobranza.
 
-La vista `/app/sales` simula estas entidades en memoria del navegador y usa la
-API real solo para catalogos, configuracion y busqueda de productos.
+La vista `/app/sales` todavia simula clientes, vendedores, bancos y cuentas en
+memoria del navegador. Facturas POS, detalles, pagos aplicados y descuento de
+inventario ya se registran en backend.
