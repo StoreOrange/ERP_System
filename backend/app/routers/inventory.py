@@ -22,6 +22,7 @@ from ..models.inventory import (
     PacaAperturaOrigen,
     PacaAperturaLinea,
     Producto,
+    ProductoCombo,
     ProductoReceta,
     ProductoRecetaLinea,
     ProduccionInventario,
@@ -57,6 +58,8 @@ from ..schemas.inventory import (
     PacaAperturaResponse,
     ProductoRecetaResponse,
     ProductoRecetaSaveRequest,
+    ProductoComboCreate,
+    ProductoComboResponse,
     ProductoCreate,
     ProductoResponse,
     ProductoUpdate,
@@ -673,7 +676,9 @@ def search_products_for_sales(
             2: producto.precio_venta2,
             3: producto.precio_venta3,
         }[price_tier]
+        combo_count = len([combo for combo in (producto.combo_children or []) if combo.activo])
         existencia = float(balances.get((producto.id, bodega_id), Decimal("0")) or 0) if bodega_id else float(producto.saldo.existencia if producto.saldo else 0)
+        selected_price_cs = float(selected_price or 0)
         items.append(
             {
                 "id": producto.id,
@@ -684,9 +689,11 @@ def search_products_for_sales(
                 "precio_venta2": float(producto.precio_venta2 or 0),
                 "precio_venta3": float(producto.precio_venta3 or 0),
                 "selected_price_tier": price_tier,
-                "selected_price_cs": float(selected_price or 0),
+                "selected_price_cs": selected_price_cs,
+                "selected_price_usd": 0,
                 "existencia": existencia,
                 "free_qty": existencia,
+                "combo_count": combo_count,
                 "es_por_peso": bool(producto.es_por_peso),
                 "unidad_medida_id": producto.unidad_medida_id,
                 "unidad_medida_nombre": producto.unidad_medida.nombre if producto.unidad_medida else "",
@@ -980,6 +987,75 @@ def save_product_recipe(product_id: int, payload: ProductoRecetaSaveRequest, db:
         .filter(ProductoReceta.producto_final_id == product_id)
         .first()
     )
+
+
+@router.get("/products/{product_id}/combo", response_model=List[ProductoComboResponse])
+def get_product_combo(product_id: int, db: Session = Depends(get_db)):
+    producto = db.query(Producto).filter(Producto.id == product_id).first()
+    if not producto:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    return (
+        db.query(ProductoCombo)
+        .options(joinedload(ProductoCombo.child).joinedload(Producto.unidad_medida))
+        .filter(ProductoCombo.parent_producto_id == product_id, ProductoCombo.activo.is_(True))
+        .order_by(ProductoCombo.id)
+        .all()
+    )
+
+
+@router.post("/products/{product_id}/combo", response_model=ProductoComboResponse, status_code=status.HTTP_201_CREATED)
+def save_product_combo_item(product_id: int, payload: ProductoComboCreate, db: Session = Depends(get_db)):
+    parent = db.query(Producto).filter(Producto.id == product_id).first()
+    if not parent:
+        raise HTTPException(status_code=404, detail="Producto combo no encontrado")
+    child = db.query(Producto).filter(Producto.id == payload.child_producto_id).first()
+    if not child:
+        raise HTTPException(status_code=404, detail="Producto de regalia no encontrado")
+    if child.id == parent.id:
+        raise HTTPException(status_code=400, detail="El producto combo no puede ser su propia regalia")
+    if Decimal(payload.cantidad or 0) <= 0:
+        raise HTTPException(status_code=400, detail="La cantidad de regalia debe ser mayor que cero")
+
+    combo = (
+        db.query(ProductoCombo)
+        .filter(
+            ProductoCombo.parent_producto_id == product_id,
+            ProductoCombo.child_producto_id == payload.child_producto_id,
+        )
+        .first()
+    )
+    if combo:
+        combo.cantidad = Decimal(payload.cantidad)
+        combo.activo = bool(payload.activo)
+    else:
+        combo = ProductoCombo(
+            parent_producto_id=product_id,
+            child_producto_id=payload.child_producto_id,
+            cantidad=Decimal(payload.cantidad),
+            activo=bool(payload.activo),
+        )
+        db.add(combo)
+    db.commit()
+    return (
+        db.query(ProductoCombo)
+        .options(joinedload(ProductoCombo.child).joinedload(Producto.unidad_medida))
+        .filter(ProductoCombo.id == combo.id)
+        .first()
+    )
+
+
+@router.delete("/products/{product_id}/combo/{combo_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_product_combo_item(product_id: int, combo_id: int, db: Session = Depends(get_db)):
+    combo = (
+        db.query(ProductoCombo)
+        .filter(ProductoCombo.id == combo_id, ProductoCombo.parent_producto_id == product_id)
+        .first()
+    )
+    if not combo:
+        raise HTTPException(status_code=404, detail="Regalia de combo no encontrada")
+    db.delete(combo)
+    db.commit()
+    return None
 
 
 @router.post("/producciones/open", response_model=ProduccionInventarioResponse, status_code=status.HTTP_201_CREATED)

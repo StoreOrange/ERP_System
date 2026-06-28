@@ -43,6 +43,8 @@ class SalesInvoiceItemCreate(BaseModel):
     cod_producto: Optional[str] = None
     descripcion: Optional[str] = None
     unidad: Optional[str] = None
+    combo_role: Optional[str] = None
+    combo_group: Optional[str] = None
 
 
 class SalesPaymentCreate(BaseModel):
@@ -85,6 +87,8 @@ class SalesInvoiceItemResponse(BaseModel):
     precio_unitario_cs: Decimal
     subtotal_usd: Decimal
     subtotal_cs: Decimal
+    combo_role: Optional[str] = None
+    combo_group: Optional[str] = None
 
 
 class SalesPaymentResponse(BaseModel):

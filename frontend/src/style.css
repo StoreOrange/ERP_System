@@ -1701,7 +1701,7 @@ a {
 
 .sales-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.7rem;
 }
 
@@ -1730,9 +1730,30 @@ a {
   font-size: 0.96rem;
 }
 
+.sales-kpi-box small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--erp-text-muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sales-kpi-box.accent {
   background: var(--erp-primary-soft);
   border-color: rgba(117, 87, 168, 0.18);
+}
+
+.sales-kpi-box.sales-date-fixed {
+  border-color: rgba(28, 55, 90, 0.16);
+  background: linear-gradient(135deg, #ffffff, #f5f8fc);
+}
+
+.sales-kpi-box.sales-warehouse-kpi {
+  border-color: rgba(28, 55, 90, 0.14);
+  background: linear-gradient(135deg, #ffffff, #f6f8fc);
 }
 
 .sales-tabbar {
@@ -2016,6 +2037,107 @@ a {
 .sales-payment-grid {
   display: grid;
   gap: 0.9rem;
+}
+
+.sales-invoice-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.72rem;
+  align-items: stretch;
+}
+
+.sales-invoice-detail-card {
+  display: grid;
+  align-content: start;
+  gap: 0.42rem;
+  min-width: 0;
+  padding: 0.72rem;
+  border: 1px solid var(--erp-line);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #ffffff, #fbf9fd);
+}
+
+.sales-invoice-detail-card-wide {
+  grid-column: 1 / -1;
+}
+
+.sales-detail-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.sales-detail-card-head > span,
+.sales-detail-label {
+  color: var(--erp-text-muted);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sales-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.38rem;
+}
+
+.sales-selected-party {
+  display: flex;
+  align-items: center;
+  gap: 0.62rem;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.48rem 0.62rem;
+  border: 1px solid rgba(117, 87, 168, 0.14);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.sales-selected-party i {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 999px;
+  background: rgba(117, 87, 168, 0.1);
+  color: var(--erp-primary);
+  flex-shrink: 0;
+}
+
+.sales-selected-party div {
+  min-width: 0;
+}
+
+.sales-selected-party small,
+.sales-selected-party strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales-selected-party small {
+  color: var(--erp-text-muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+}
+
+.sales-selected-party strong {
+  color: var(--erp-text);
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.sales-invoice-detail-card .form-control,
+.sales-invoice-detail-card .p-select,
+.sales-invoice-detail-card .p-inputtext {
+  width: 100%;
+  min-width: 0;
 }
 
 .sales-form-grid {
@@ -2427,7 +2549,7 @@ a {
 }
 
 .sales-kpi-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.3rem;
 }
 
@@ -2588,6 +2710,9 @@ a {
 .sales-form-grid .form-control,
 .sales-form-grid .p-select,
 .sales-form-grid .p-inputtext,
+.sales-invoice-detail-card .form-control,
+.sales-invoice-detail-card .p-select,
+.sales-invoice-detail-card .p-inputtext,
 .sales-payment-formgrid .form-control,
 .sales-payment-formgrid .p-select,
 .sales-payment-formgrid .p-inputnumber-input {
@@ -3475,170 +3600,6 @@ a {
   line-height: 1.35;
 }
 
-.sales-date-field {
-  grid-column: span 2;
-  min-width: 0;
-  position: relative;
-  overflow: visible;
-  z-index: 20;
-}
-
-.sales-date-control {
-  position: relative;
-  display: grid;
-  grid-template-columns: 2.1rem minmax(0, 1fr);
-  align-items: stretch;
-  width: 100%;
-  min-height: 2.18rem;
-  overflow: visible;
-  border: 1px solid #ced4da;
-  border-radius: 0.5rem;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(33, 37, 41, 0.04);
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-  z-index: 8;
-}
-
-.sales-date-control:focus-within,
-.sales-date-control.open {
-  border-color: #714b67;
-  box-shadow: 0 0 0 0.2rem rgba(113, 75, 103, 0.16);
-  z-index: 120;
-}
-
-.sales-date-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #f8f9fa;
-  color: #714b67;
-}
-
-.sales-date-icon {
-  border-radius: 0.45rem 0 0 0.45rem;
-  border-right: 1px solid #ced4da;
-  font-size: 0.86rem;
-}
-
-.sales-date-display {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.5rem;
-  min-width: 0;
-  min-height: 2.16rem;
-  padding: 0.28rem 0.62rem;
-  border: 0;
-  background: linear-gradient(180deg, #ffffff, #fbfafb);
-  border-radius: 0 0.45rem 0.45rem 0;
-  color: #212529;
-  cursor: pointer;
-  text-align: left;
-}
-
-.sales-date-display strong {
-  min-width: 0;
-  overflow: hidden;
-  color: #212529;
-  font-size: 0.82rem;
-  font-weight: 850;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sales-date-picker {
-  position: absolute;
-  top: calc(100% + 0.42rem);
-  left: 0;
-  width: min(21rem, 92vw);
-  padding: 0.72rem;
-  border: 1px solid rgba(113, 75, 103, 0.18);
-  border-radius: 0.75rem;
-  background: #ffffff;
-  box-shadow: 0 20px 45px rgba(49, 33, 57, 0.18);
-  z-index: 999;
-}
-
-.sales-date-picker-head {
-  display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) 2rem;
-  align-items: center;
-  gap: 0.45rem;
-  margin-bottom: 0.55rem;
-}
-
-.sales-date-picker-head strong {
-  color: #2f2530;
-  font-size: 0.86rem;
-  font-weight: 900;
-  text-align: center;
-  text-transform: capitalize;
-}
-
-.sales-date-picker-head button,
-.sales-date-days button {
-  border: 1px solid transparent;
-  border-radius: 0.5rem;
-  background: #ffffff;
-  color: #714b67;
-  cursor: pointer;
-}
-
-.sales-date-picker-head button {
-  width: 2rem;
-  height: 2rem;
-  background: #f7f2f6;
-}
-
-.sales-date-picker-head button:hover,
-.sales-date-days button:hover {
-  border-color: rgba(113, 75, 103, 0.24);
-  background: #f7f2f6;
-}
-
-.sales-date-weekdays,
-.sales-date-days {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.25rem;
-}
-
-.sales-date-weekdays {
-  margin-bottom: 0.3rem;
-}
-
-.sales-date-weekdays span {
-  color: #6c757d;
-  font-size: 0.62rem;
-  font-weight: 900;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.sales-date-days button {
-  min-height: 2rem;
-  color: #2f2530;
-  font-size: 0.76rem;
-  font-weight: 800;
-}
-
-.sales-date-days button.muted {
-  color: #adb5bd;
-  background: #fbfbfc;
-}
-
-.sales-date-days button.today {
-  border-color: rgba(113, 75, 103, 0.28);
-  color: #714b67;
-}
-
-.sales-date-days button.selected {
-  border-color: #714b67;
-  background: #714b67;
-  color: #ffffff;
-  box-shadow: 0 8px 18px rgba(113, 75, 103, 0.22);
-}
-
 .sales-receipt-dialog .p-dialog-content {
   background: #f7f2f6;
 }
@@ -3925,6 +3886,9 @@ a {
 .sales-form-grid .form-control,
 .sales-form-grid .p-select,
 .sales-form-grid .p-inputtext,
+.sales-invoice-detail-card .form-control,
+.sales-invoice-detail-card .p-select,
+.sales-invoice-detail-card .p-inputtext,
 .sales-payment-formgrid .form-control,
 .sales-payment-formgrid .p-select,
 .sales-payment-formgrid .p-inputnumber-input {
@@ -4010,7 +3974,7 @@ a {
   }
 
   .sales-kpi-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -4030,6 +3994,10 @@ a {
   .sales-search-results {
     max-height: 18rem;
   }
+
+  .sales-invoice-details-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 860px) {
@@ -4045,6 +4013,10 @@ a {
   .sales-summary-strip,
   .sales-pay-totals {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sales-invoice-details-grid {
+    grid-template-columns: 1fr;
   }
 
   .sales-form-grid,
@@ -7180,30 +7152,6 @@ input[type="month"].form-control::-webkit-calendar-picker-indicator:hover {
   filter: invert(35%) sepia(16%) saturate(1059%) hue-rotate(260deg) brightness(86%) contrast(86%);
 }
 
-.app-main .sales-date-control {
-  min-height: 2.18rem !important;
-  overflow: visible !important;
-  border: 1px solid #ced4da !important;
-  border-radius: 0.5rem !important;
-  background: #ffffff !important;
-  box-shadow: 0 1px 2px rgba(33, 37, 41, 0.04) !important;
-}
-
-.app-main .sales-date-field {
-  overflow: visible !important;
-}
-
-.app-main .sales-date-control:focus-within,
-.app-main .sales-date-control.open {
-  border-color: #714b67 !important;
-  box-shadow: 0 0 0 0.2rem rgba(113, 75, 103, 0.16) !important;
-  z-index: 120 !important;
-}
-
-.app-main .sales-date-display {
-  min-height: 2.16rem !important;
-}
-
 .app-main .movement-date-control {
   display: block !important;
   min-height: 2.35rem !important;
@@ -7233,8 +7181,7 @@ input[type="month"].form-control::-webkit-calendar-picker-indicator:hover {
 }
 
 @media (max-width: 640px) {
-  .movement-date-picker,
-  .sales-date-picker {
+  .movement-date-picker {
     left: 50%;
     width: min(19rem, calc(100vw - 2rem));
     transform: translateX(-50%);
@@ -9249,4 +9196,194 @@ body {
 .app-main .sales-summary-total span,
 .app-main .sales-summary-total strong {
   color: #ffffff !important;
+}
+
+.app-main .sales-combo-dialog .p-dialog-content {
+  padding-top: 0.35rem;
+}
+
+.app-main .sales-combo-header-action {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: 0.45rem;
+  padding: 0.36rem 0.62rem;
+  border: 1px solid rgba(117, 87, 168, 0.38);
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--erp-primary), var(--erp-primary-strong));
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  box-shadow: none;
+}
+
+.app-main .sales-combo-header-action:hover {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+}
+
+.app-main .sales-combo-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 0.65rem;
+}
+
+.app-main .sales-combo-panel {
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid var(--erp-line);
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), var(--erp-surface-muted));
+}
+
+.app-main .sales-combo-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.55rem;
+  margin-bottom: 0.55rem;
+}
+
+.app-main .sales-combo-panel-head h4 {
+  margin: 0.1rem 0 0;
+  color: var(--erp-primary-strong);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.app-main .sales-combo-selected,
+.app-main .sales-combo-result,
+.app-main .sales-combo-gift-row,
+.app-main .sales-combo-qty-card,
+.app-main .sales-combo-totalbar {
+  border: 1px solid var(--erp-line);
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.app-main .sales-combo-selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+}
+
+.app-main .sales-combo-selected strong,
+.app-main .sales-combo-gift-row strong,
+.app-main .sales-combo-result strong {
+  display: block;
+  color: var(--erp-text);
+  font-size: 0.75rem;
+}
+
+.app-main .sales-combo-selected span,
+.app-main .sales-combo-gift-row span,
+.app-main .sales-combo-result small {
+  color: var(--erp-text-muted);
+  font-size: 0.65rem;
+}
+
+.app-main .sales-combo-results {
+  display: grid;
+  gap: 0.34rem;
+  max-height: 11rem;
+  margin-top: 0.45rem;
+  overflow: auto;
+}
+
+.app-main .sales-combo-results-compact {
+  max-height: 8rem;
+}
+
+.app-main .sales-combo-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+  width: 100%;
+  padding: 0.46rem 0.55rem;
+  text-align: left;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.app-main .sales-combo-result:hover:not(:disabled) {
+  border-color: rgba(117, 87, 168, 0.42);
+  box-shadow: 0 8px 18px rgba(76, 55, 103, 0.08);
+  transform: translateY(-1px);
+}
+
+.app-main .sales-combo-result:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
+.app-main .sales-combo-qty-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+  padding: 0.48rem 0.55rem;
+}
+
+.app-main .sales-combo-qty-card > span {
+  color: var(--erp-primary-strong);
+  font-size: 0.64rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.app-main .sales-combo-gift-list {
+  display: grid;
+  gap: 0.38rem;
+  margin-top: 0.5rem;
+}
+
+.app-main .sales-combo-gift-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.44rem 0.5rem;
+}
+
+.app-main .sales-combo-totalbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin-top: 0.65rem;
+  padding: 0.55rem;
+  background: linear-gradient(135deg, var(--erp-primary-soft), #ffffff);
+}
+
+.app-main .sales-combo-totalbar div {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.app-main .sales-combo-totalbar span {
+  color: var(--erp-text-muted);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.app-main .sales-combo-totalbar strong {
+  color: var(--erp-primary-strong);
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+@media (max-width: 860px) {
+  .app-main .sales-combo-layout,
+  .app-main .sales-combo-totalbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-main .sales-combo-gift-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

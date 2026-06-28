@@ -1,6 +1,6 @@
 # Bitacora del sistema de planificacion de recursos empresariales
 
-Ultima actualizacion: 2026-06-06
+Ultima actualizacion: 2026-06-21
 
 ## Objetivo
 
@@ -8,6 +8,17 @@ Construir un sistema de planificacion de recursos empresariales modular para
 Orange Tec tomando como base funcional el sistema HollywoodPacas. Integra
 autenticacion, inventario, produccion, configuracion empresarial y una interfaz
 de ventas en evolucion, orientado a pymes, emprendimientos y negocios locales.
+
+## Documento complementario por sprints
+
+Se agrego la bitacora extendida por modulos y sprints en:
+
+- [Bitacora_Sprint.md](./Bitacora_Sprint.md)
+
+Este documento organiza el desarrollo bajo la estructura: problema a resolver,
+objetivos, actividades, requerimientos funcionales, requerimientos no
+funcionales, analisis, diseno, implementacion, evidencias, validacion,
+retroalimentacion y resultados.
 
 ## Historial verificado
 

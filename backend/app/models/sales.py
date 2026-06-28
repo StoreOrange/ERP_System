@@ -70,6 +70,8 @@ class SalesInvoiceItem(Base):
     precio_unitario_cs = Column(Numeric(14, 2), default=0)
     subtotal_usd = Column(Numeric(14, 2), default=0)
     subtotal_cs = Column(Numeric(14, 2), default=0)
+    combo_role = Column(String(20), nullable=True)
+    combo_group = Column(String(60), nullable=True)
 
     invoice = relationship("SalesInvoice", back_populates="items")
     producto = relationship("Producto")

@@ -241,6 +241,10 @@ def create_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_db)):
         precio_unitario = Decimal(str(item.precio_unitario or 0))
         if cantidad <= 0 or precio_unitario < 0:
             raise HTTPException(status_code=400, detail="Cantidad y precio deben ser validos")
+        combo_role = (item.combo_role or "").strip().lower() or None
+        if combo_role and combo_role not in {"parent", "gift"}:
+            raise HTTPException(status_code=400, detail="Rol de combo invalido")
+        combo_group = (item.combo_group or "").strip() or None
 
         requested_by_product[product_id] = requested_by_product.get(product_id, Decimal("0")) + cantidad
         available = Decimal(str(balances.get((product_id, payload.bodega_id), Decimal("0")) or 0))
@@ -276,6 +280,8 @@ def create_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_db)):
                 precio_unitario_cs=price_cs,
                 subtotal_usd=subtotal_usd,
                 subtotal_cs=subtotal_cs,
+                combo_role=combo_role,
+                combo_group=combo_group,
             )
         )
         db.add(

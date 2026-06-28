@@ -272,6 +272,24 @@ class ProductoRecetaResponse(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class ProductoComboCreate(BaseModel):
+    child_producto_id: int
+    cantidad: Decimal = Field(default=Decimal("1"))
+    activo: bool = True
+
+
+class ProductoComboResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    parent_producto_id: int
+    child_producto_id: int
+    cantidad: Decimal
+    activo: bool = True
+    created_at: Optional[datetime] = None
+    child: Optional[ProductoResponse] = None
+
+
 class InventoryCatalogsResponse(BaseModel):
     lineas: List[LineaResponse]
     segmentos: List[SegmentoResponse]
@@ -542,8 +560,10 @@ class ProductSearchItemResponse(BaseModel):
     precio_venta3: float
     selected_price_tier: int
     selected_price_cs: float
+    selected_price_usd: float = 0
     existencia: float
     free_qty: float
+    combo_count: int = 0
     es_por_peso: bool
     unidad_medida_id: Optional[int] = None
     unidad_medida_nombre: str = ""

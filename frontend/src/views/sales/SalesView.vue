@@ -6,6 +6,9 @@
           <p class="page-kicker">Punto de venta</p>
           <h1 class="page-title">{{ salesInterfaceTitle }}</h1>
           <p class="sales-interface-caption">{{ salesInterfaceCaption }}</p>
+          <button type="button" class="sales-combo-header-action" @click="openComboDialog">
+            Aplicar combo
+          </button>
         </div>
 
         <div class="sales-kpi-grid">
@@ -13,9 +16,14 @@
             <span>Factura</span>
             <strong>{{ nextInvoice }}</strong>
           </article>
-          <article class="sales-kpi-box">
-            <span>Bodega</span>
+          <article class="sales-kpi-box sales-date-fixed">
+            <span>Fecha de facturacion</span>
+            <strong>{{ formattedSaleDate }}</strong>
+          </article>
+          <article class="sales-kpi-box sales-warehouse-kpi">
+            <span>Bodega / Sucursal</span>
             <strong>{{ currentBodegaLabel }}</strong>
+            <small>{{ currentSucursalLabel }}</small>
           </article>
           <article class="sales-kpi-box accent">
             <span>Total</span>
@@ -56,6 +64,12 @@
                     <div class="sales-ticket-titleline">
                       <strong>{{ item.descripcion }}</strong>
                       <Tag :value="item.cod_producto" rounded />
+                      <Tag
+                        v-if="item.combo_role"
+                        :value="comboRoleLabel(item.combo_role)"
+                        :severity="comboRoleSeverity(item.combo_role)"
+                        rounded
+                      />
                     </div>
 
                     <div class="sales-ticket-meta">
@@ -111,24 +125,20 @@
             </div>
 
             <div class="sales-card-body">
-            <div class="sales-form-grid">
-              <div class="sales-form-span-2 sales-customer-stack">
-                <label class="field-group">
+            <div class="sales-invoice-details-grid">
+              <section class="sales-invoice-detail-card sales-invoice-detail-card-wide">
+                <div class="sales-detail-card-head">
                   <span>Cliente</span>
-                  <div class="sales-party-bar">
+                  <div class="sales-detail-actions">
                     <Button
                       type="button"
                       severity="secondary"
                       variant="outlined"
                       size="small"
                       icon="bi bi-search"
-                      label="Buscar cliente"
+                      label="Buscar"
                       @click="customerDialog = true"
                     />
-                    <div class="sales-party-selection">
-                      <span class="sales-party-label">Seleccionado:</span>
-                      <strong class="sales-party-value">{{ saleForm.customer_name || "Consumidor final" }}</strong>
-                    </div>
                     <Button
                       class="sales-default-customer"
                       type="button"
@@ -147,11 +157,18 @@
                       variant="outlined"
                       size="small"
                       icon="bi bi-person-plus"
-                      :label="showCustomerCreate ? 'Cerrar' : 'Nuevo cliente'"
+                      :label="showCustomerCreate ? 'Cerrar' : 'Nuevo'"
                       @click="showCustomerCreate = !showCustomerCreate"
                     />
                   </div>
-                </label>
+                </div>
+                <div class="sales-selected-party">
+                  <i class="bi bi-person-vcard"></i>
+                  <div>
+                    <small>Seleccionado</small>
+                    <strong>{{ saleForm.customer_name || "Consumidor final" }}</strong>
+                  </div>
+                </div>
 
                 <div v-if="showCustomerCreate" class="sales-inline-create">
                   <div class="sales-inline-create-title">Nuevo cliente</div>
@@ -165,92 +182,37 @@
                     <Button type="button" icon="bi bi-person-plus" label="Guardar cliente" @click="saveCustomer" />
                   </div>
                 </div>
-              </div>
+              </section>
 
-              <div class="sales-vendor-field">
-                <label class="field-group">
-                  <span>Vendedor</span>
-                  <div class="sales-inline-actions">
-                    <Select
-                      v-model="saleForm.vendedor_id"
-                      :options="vendors"
-                      option-label="nombre"
-                      option-value="id"
-                      placeholder="Selecciona"
-                      filter
-                      :filter-fields="['nombre']"
-                    />
-                  </div>
-                </label>
-              </div>
+              <section class="sales-invoice-detail-card">
+                <span class="sales-detail-label">Vendedor</span>
+                <Select
+                  v-model="saleForm.vendedor_id"
+                  :options="vendors"
+                  option-label="nombre"
+                  option-value="id"
+                  placeholder="Selecciona vendedor"
+                  filter
+                  :filter-fields="['nombre']"
+                />
+              </section>
 
-              <div class="field-group sales-date-field">
-                <span>Fecha</span>
-                <div ref="saleDatePickerRef" class="sales-date-control" :class="{ open: saleDatePickerOpen }">
-                  <span class="sales-date-icon" aria-hidden="true">
-                    <i class="bi bi-calendar3"></i>
-                  </span>
-                  <button type="button" class="sales-date-display" @click="toggleSaleDatePicker">
-                    <strong>{{ formattedSaleDate }}</strong>
-                  </button>
-
-                  <div v-if="saleDatePickerOpen" class="sales-date-picker" role="dialog" aria-label="Seleccionar fecha">
-                    <div class="sales-date-picker-head">
-                      <button type="button" aria-label="Mes anterior" @click="moveSaleDateMonth(-1)">
-                        <i class="bi bi-chevron-left"></i>
-                      </button>
-                      <strong>{{ saleDateMonthLabel }}</strong>
-                      <button type="button" aria-label="Mes siguiente" @click="moveSaleDateMonth(1)">
-                        <i class="bi bi-chevron-right"></i>
-                      </button>
-                    </div>
-                    <div class="sales-date-weekdays">
-                      <span v-for="day in saleDateWeekdays" :key="day">{{ day }}</span>
-                    </div>
-                    <div class="sales-date-days">
-                      <button
-                        v-for="day in saleDateCalendarDays"
-                        :key="day.key"
-                        type="button"
-                        :class="{ muted: !day.currentMonth, today: day.isToday, selected: day.isSelected }"
-                        @click="selectSaleDate(day.iso)"
-                      >
-                        {{ day.day }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <label class="field-group">
-                <span>Condicion de venta</span>
+              <section class="sales-invoice-detail-card">
+                <span class="sales-detail-label">Condicion de venta</span>
                 <select v-model="saleForm.condition" class="form-control">
                   <option value="CONTADO">Contado</option>
                   <option value="CREDITO">Credito</option>
                 </select>
-              </label>
+              </section>
 
-              <label class="field-group">
-                <span>Bodega</span>
-                <Select
-                  v-model="saleForm.bodega_id"
-                  :options="catalogs.bodegas"
-                  option-label="name"
-                  option-value="id"
-                  placeholder="Seleccionar"
-                  filter
-                  :filter-fields="['name', 'code']"
-                />
-              </label>
-
-              <label class="field-group sales-form-span-4">
-                <span>Observacion</span>
+              <section class="sales-invoice-detail-card sales-invoice-detail-card-wide">
+                <span class="sales-detail-label">Observacion</span>
                 <input
                   v-model="saleForm.observacion"
                   class="form-control"
                   placeholder="Agrega una nota comercial opcional"
                 />
-              </label>
+              </section>
             </div>
             </div>
           </section>
@@ -695,6 +657,149 @@
       </div>
     </Dialog>
 
+    <Dialog
+      v-model:visible="comboDialog"
+      modal
+      :style="{ width: 'min(980px, 95vw)' }"
+      class="sales-helper-dialog sales-combo-dialog"
+      @show="focusComboParentSearch"
+    >
+      <template #header>
+        <div class="sales-payment-title">
+          <span class="products-section-kicker">Venta de combos</span>
+          <h3>Armar combo para facturar</h3>
+        </div>
+      </template>
+
+      <div class="sales-combo-layout">
+        <section class="sales-combo-panel">
+          <div class="sales-combo-panel-head">
+            <div>
+              <span class="products-section-kicker">Producto principal</span>
+              <h4>Paca / oferta base</h4>
+            </div>
+            <Tag v-if="comboParent" severity="info" value="Principal" rounded />
+          </div>
+
+          <label class="field-group">
+            <span>Buscar producto principal</span>
+            <InputText
+              ref="comboParentInputRef"
+              v-model="comboParentSearch"
+              class="form-control"
+              placeholder="Codigo, barra o descripcion"
+            />
+          </label>
+
+          <div v-if="comboParent" class="sales-combo-selected">
+            <div>
+              <strong>{{ comboParent.descripcion }}</strong>
+              <span>{{ comboParent.cod_producto }} &middot; Stock {{ formatQty(comboParent.existencia) }}</span>
+            </div>
+            <b>{{ invoiceCurrencySymbol }} {{ formatMoney(resolvePrice(comboParent)) }}</b>
+          </div>
+
+          <div v-if="comboSearchingParent" class="empty-state">Buscando...</div>
+          <div v-else-if="comboParentResults.length" class="sales-combo-results">
+            <button
+              v-for="product in comboParentResults"
+              :key="product.id"
+              type="button"
+              class="sales-combo-result"
+              :disabled="!hasProductStock(product)"
+              @click="selectComboParent(product)"
+            >
+              <span>
+                <strong>{{ product.descripcion }}</strong>
+                <small>{{ product.cod_producto }} &middot; Stock {{ formatQty(product.existencia) }}</small>
+              </span>
+              <b>{{ invoiceCurrencySymbol }} {{ formatMoney(resolvePrice(product)) }}</b>
+            </button>
+          </div>
+
+          <div class="sales-combo-qty-card">
+            <span>Cantidad de combos</span>
+            <div class="sales-search-qty">
+              <button type="button" :disabled="comboQty <= 1" @click="comboQty -= 1">-</button>
+              <strong>{{ formatQty(comboQty) }}</strong>
+              <button type="button" :disabled="!canIncreaseComboQty" @click="comboQty += 1">+</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="sales-combo-panel">
+          <div class="sales-combo-panel-head">
+            <div>
+              <span class="products-section-kicker">Regalias / componentes</span>
+              <h4>Productos incluidos</h4>
+            </div>
+            <Tag :value="`${comboGifts.length} items`" rounded />
+          </div>
+
+          <label class="field-group">
+            <span>Agregar producto incluido</span>
+            <InputText
+              v-model="comboGiftSearch"
+              class="form-control"
+              placeholder="Buscar producto para incluir"
+            />
+          </label>
+
+          <div v-if="comboSearchingGift" class="empty-state">Buscando...</div>
+          <div v-else-if="comboGiftResults.length" class="sales-combo-results sales-combo-results-compact">
+            <button
+              v-for="product in comboGiftResults"
+              :key="product.id"
+              type="button"
+              class="sales-combo-result"
+              :disabled="!hasProductStock(product)"
+              @click="addComboGift(product)"
+            >
+              <span>
+                <strong>{{ product.descripcion }}</strong>
+                <small>{{ product.cod_producto }} &middot; Stock {{ formatQty(product.existencia) }}</small>
+              </span>
+              <b>{{ invoiceCurrencySymbol }} {{ formatMoney(resolvePrice(product)) }}</b>
+            </button>
+          </div>
+
+          <div class="sales-combo-gift-list">
+            <div v-if="!comboGifts.length" class="empty-state">Agrega los productos incluidos en el combo.</div>
+            <article v-for="gift in comboGifts" :key="gift.id" class="sales-combo-gift-row">
+              <div>
+                <strong>{{ gift.descripcion }}</strong>
+                <span>{{ gift.cod_producto }} &middot; Stock {{ formatQty(gift.existencia) }}</span>
+              </div>
+              <div class="sales-search-qty">
+                <button type="button" :disabled="gift.cantidad <= productStepQty(gift)" @click="decreaseComboGift(gift)">-</button>
+                <strong>{{ formatQty(gift.cantidad) }}</strong>
+                <button type="button" :disabled="!canIncreaseComboGift(gift)" @click="increaseComboGift(gift)">+</button>
+              </div>
+              <Button type="button" icon="bi bi-x-lg" severity="danger" variant="text" rounded @click="removeComboGift(gift.id)" />
+            </article>
+          </div>
+        </section>
+      </div>
+
+      <div class="sales-combo-totalbar">
+        <div>
+          <span>Precio unitario del combo</span>
+          <strong>{{ invoiceCurrencySymbol }} {{ formatMoney(comboUnitPrice) }}</strong>
+        </div>
+        <div>
+          <span>Total a facturar</span>
+          <strong>{{ invoiceCurrencySymbol }} {{ formatMoney(comboTotal) }}</strong>
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="sales-payment-footer">
+          <Button type="button" severity="secondary" variant="outlined" label="Cancelar" @click="comboDialog = false" />
+          <Button type="button" icon="bi bi-plus-circle" label="Agregar combo al ticket" :disabled="!canAddCombo" @click="addComboToSale" />
+        </div>
+      </template>
+    </Dialog>
+
   </section>
 </template>
 
@@ -711,7 +816,7 @@ import { useToast } from "primevue/usetoast";
 
 import { fetchVendors } from "../../services/access";
 import { readStoredUser } from "../../services/auth";
-import { fetchInventoryCatalogs, searchInventoryProducts } from "../../services/inventory";
+import { fetchInventoryCatalogs, fetchProductCombo, searchInventoryProducts } from "../../services/inventory";
 import { createCustomer, createSalesInvoice, fetchCustomers, fetchNextSalesInvoice } from "../../services/sales";
 import { buildAssetUrl, fetchCurrentExchangeRate, fetchPublicBusinessSettings } from "../../services/settings";
 
@@ -720,18 +825,28 @@ const paymentDialog = ref(false);
 const receiptDialog = ref(false);
 const saleSubmitting = ref(false);
 const customerDialog = ref(false);
+const comboDialog = ref(false);
 const searchingProducts = ref(false);
 const showCustomerCreate = ref(false);
 const searchQuery = ref("");
 const searchResults = ref([]);
 const searchActiveIndex = ref(-1);
 const searchTimeout = ref(null);
+const comboParentSearch = ref("");
+const comboGiftSearch = ref("");
+const comboParentResults = ref([]);
+const comboGiftResults = ref([]);
+const comboParent = ref(null);
+const comboGifts = ref([]);
+const comboQty = ref(1);
+const comboSearchingParent = ref(false);
+const comboSearchingGift = ref(false);
+const comboParentTimeout = ref(null);
+const comboGiftTimeout = ref(null);
 const searchInputRef = ref(null);
 const searchPanelRef = ref(null);
+const comboParentInputRef = ref(null);
 const paymentAmountRef = ref(null);
-const saleDatePickerRef = ref(null);
-const saleDatePickerOpen = ref(false);
-const saleDateViewDate = ref(new Date());
 const currentTimeLabel = ref(formatTimeNow());
 const rateToday = ref(null);
 const scannerState = ref("idle");
@@ -829,6 +944,19 @@ const currentBodegaLabel = computed(() => {
   const bodega = catalogs.bodegas.find((item) => item.id === saleForm.bodega_id);
   return bodega?.name || "-";
 });
+const currentAccessProfile = computed(() => {
+  const profiles = Array.isArray(currentUser?.access_profiles) ? currentUser.access_profiles : [];
+  return (
+    profiles.find((profile) => profile.activo && profile.is_default && profile.bodega_id) ||
+    profiles.find((profile) => profile.activo && profile.bodega_id) ||
+    currentUser?.vendor_profile ||
+    null
+  );
+});
+const currentSucursalLabel = computed(() => {
+  const profile = currentAccessProfile.value;
+  return profile?.sucursal_name || selectedVendor.value?.sucursal_name || "Sucursal no asignada";
+});
 const totalUsd = computed(() => saleItems.value.reduce((sum, item) => sum + Number(item.subtotal_usd || 0), 0));
 const totalCs = computed(() => saleItems.value.reduce((sum, item) => sum + Number(item.subtotal_cs || 0), 0));
 const invoiceTotal = computed(() => (saleForm.invoice_currency === "USD" ? totalUsd.value : totalCs.value));
@@ -840,14 +968,6 @@ const businessPhones = computed(() =>
   [businessSettings.phone, businessSettings.phones].filter(Boolean).join(" / "),
 );
 const businessInvoiceLogo = computed(() => buildAssetUrl(businessSettings.logo_invoice || businessSettings.logo_sidebar));
-const saleDateWeekdays = ["Do", "Lu", "Ma", "Mi", "Ju", "Vi", "Sa"];
-const saleDateMonthLabel = computed(() =>
-  new Intl.DateTimeFormat("es-NI", {
-    month: "long",
-    year: "numeric",
-  }).format(saleDateViewDate.value),
-);
-const saleDateCalendarDays = computed(() => buildSaleDateCalendar(saleDateViewDate.value, saleForm.date));
 const totalPaidInInvoiceCurrency = computed(() =>
   payments.value.reduce((sum, payment) => {
     const rate = getRate();
@@ -863,6 +983,17 @@ const showBankFields = computed(() => paymentMethods.find((item) => item.id === 
 const filteredAccounts = computed(() =>
   accounts.filter((item) => (!paymentDraft.banco_id || item.banco_id === paymentDraft.banco_id) && item.moneda === paymentDraft.moneda),
 );
+const comboUnitPrice = computed(() => {
+  const parentPrice = comboParent.value ? Number(resolvePrice(comboParent.value) || 0) : 0;
+  const giftsPrice = comboGifts.value.reduce((sum, item) => sum + Number(resolvePrice(item) || 0) * Number(item.cantidad || 0), 0);
+  return parentPrice + giftsPrice;
+});
+const comboTotal = computed(() => comboUnitPrice.value * Number(comboQty.value || 0));
+const canIncreaseComboQty = computed(() => {
+  if (!comboParent.value) return false;
+  return validateComboStock(Number(comboQty.value || 0) + 1).ok;
+});
+const canAddCombo = computed(() => Boolean(comboParent.value) && Number(comboQty.value || 0) > 0 && validateComboStock().ok);
 const receiptTotal = computed(() =>
   lastInvoice.value?.moneda === "USD"
     ? Number(lastInvoice.value?.total_usd || 0)
@@ -975,52 +1106,6 @@ function toIsoDate(date) {
   return `${year}-${month}-${day}`;
 }
 
-function buildSaleDateCalendar(viewDate, selectedIso) {
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const start = new Date(year, month, 1 - firstDay.getDay());
-  const today = todayIsoDate();
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-    const iso = toIsoDate(date);
-    return {
-      key: `${iso}-${index}`,
-      iso,
-      day: date.getDate(),
-      currentMonth: date.getMonth() === month,
-      isToday: iso === today,
-      isSelected: iso === selectedIso,
-    };
-  });
-}
-
-function toggleSaleDatePicker() {
-  saleDateViewDate.value = parseIsoDate(saleForm.date);
-  saleDatePickerOpen.value = !saleDatePickerOpen.value;
-}
-
-function moveSaleDateMonth(direction) {
-  const nextDate = new Date(saleDateViewDate.value);
-  nextDate.setMonth(nextDate.getMonth() + direction);
-  saleDateViewDate.value = nextDate;
-}
-
-function selectSaleDate(isoDate) {
-  saleForm.date = isoDate;
-  saleDateViewDate.value = parseIsoDate(isoDate);
-  saleDatePickerOpen.value = false;
-}
-
-function handleSaleDateOutsideClick(event) {
-  if (!saleDatePickerOpen.value) return;
-  const root = saleDatePickerRef.value;
-  if (root && !root.contains(event.target)) {
-    saleDatePickerOpen.value = false;
-  }
-}
-
 function resolvePrice(item) {
   const priceTier = DEFAULT_PRICE_LIST;
   const csPrice = Number(
@@ -1038,6 +1123,18 @@ function resolvePrice(item) {
 
 function itemCurrencyLabel(item) {
   return `${formatQty(item.cantidad)} x ${invoiceCurrencySymbol.value} ${formatMoney(item.precio)}`;
+}
+
+function comboRoleLabel(role) {
+  if (role === "parent") return "Combo";
+  if (role === "gift") return "Incluido";
+  return "";
+}
+
+function comboRoleSeverity(role) {
+  if (role === "parent") return "info";
+  if (role === "gift") return "success";
+  return "secondary";
 }
 
 function stockQty(value) {
@@ -1116,6 +1213,10 @@ function canLoadSearchProduct(product) {
   return validateProductQuantity(product, searchQuantity(product)).ok;
 }
 
+function findTicketItemForReservation(productId, comboGroup = null) {
+  return saleItems.value.find((item) => item.product_id === productId && (!comboGroup || item.combo_group === comboGroup)) || null;
+}
+
 function reservedQuantityForProduct(productId, excludeItemId = null) {
   return stockQty(
     saleItems.value.reduce((sum, item) => {
@@ -1188,6 +1289,16 @@ function normalizeProductForSale(product, quantity = null) {
   return normalized;
 }
 
+function normalizeComboGiftProduct(product) {
+  const step = productStepQty(product);
+  return {
+    ...product,
+    cantidad: Number(product.cantidad || step),
+    existencia: availableProductStock(product),
+    free_qty: availableProductStock(product),
+  };
+}
+
 function addProductToSale(product, quantity = null) {
   const selectedQty = stockQty(quantity ?? searchQuantity(product));
   const validation = validateProductQuantity(product, selectedQty);
@@ -1228,6 +1339,159 @@ function addProductToSale(product, quantity = null) {
   }, 600);
 }
 
+function openComboDialog() {
+  comboDialog.value = true;
+  if (!comboParent.value) {
+    comboParentSearch.value = "";
+    comboParentResults.value = [];
+  }
+}
+
+function focusComboParentSearch() {
+  nextTick(() => {
+    const input =
+      comboParentInputRef.value?.$el?.querySelector?.("input") ||
+      comboParentInputRef.value?.input ||
+      comboParentInputRef.value;
+    input?.focus?.();
+    input?.select?.();
+  });
+}
+
+async function hydrateComboChild(child) {
+  const code = child?.cod_producto || child?.codigo_barra || child?.descripcion || "";
+  if (!code) return child;
+  try {
+    const response = await searchInventoryProducts(code, saleForm.bodega_id || null, 1);
+    return response.items?.find((item) => item.id === child.id) || child;
+  } catch {
+    return child;
+  }
+}
+
+async function selectComboParent(product) {
+  const validation = validateProductQuantity(product, 1);
+  if (!validation.ok) {
+    showAlert("warning", validation.message);
+    return;
+  }
+  comboParent.value = product;
+  comboParentSearch.value = "";
+  comboParentResults.value = [];
+  comboQty.value = 1;
+
+  try {
+    const configuredItems = await fetchProductCombo(product.id);
+    const hydrated = [];
+    for (const comboItem of configuredItems || []) {
+      if (!comboItem.child) continue;
+      const child = await hydrateComboChild(comboItem.child);
+      hydrated.push(
+        normalizeComboGiftProduct({
+          ...child,
+          cantidad: Number(comboItem.cantidad || 1),
+        }),
+      );
+    }
+    comboGifts.value = hydrated;
+  } catch {
+    comboGifts.value = [];
+  }
+}
+
+function addComboGift(product) {
+  if (comboParent.value?.id === product.id) {
+    showAlert("warning", "El producto principal no puede repetirse como incluido.");
+    return;
+  }
+  const existing = comboGifts.value.find((item) => item.id === product.id);
+  if (existing) {
+    increaseComboGift(existing);
+  } else {
+    comboGifts.value.push(normalizeComboGiftProduct(product));
+  }
+  comboGiftSearch.value = "";
+  comboGiftResults.value = [];
+}
+
+function canIncreaseComboGift(gift) {
+  const nextQty = Number(gift.cantidad || 0) + productStepQty(gift);
+  const requested = nextQty * Number(comboQty.value || 1);
+  return validateProductQuantity(gift, requested, findTicketItemForReservation(gift.id)?.id || null).ok;
+}
+
+function increaseComboGift(gift) {
+  if (!canIncreaseComboGift(gift)) return;
+  gift.cantidad = stockQty(Number(gift.cantidad || 0) + productStepQty(gift));
+}
+
+function decreaseComboGift(gift) {
+  gift.cantidad = Math.max(productStepQty(gift), stockQty(Number(gift.cantidad || 0) - productStepQty(gift)));
+}
+
+function removeComboGift(productId) {
+  comboGifts.value = comboGifts.value.filter((item) => item.id !== productId);
+}
+
+function validateComboStock(quantity = comboQty.value) {
+  const qty = Number(quantity || 0);
+  if (!comboParent.value) return { ok: false, message: "Selecciona el producto principal del combo." };
+  if (qty <= 0) return { ok: false, message: "Ingresa una cantidad valida para el combo." };
+
+  const parentValidation = validateProductQuantity(comboParent.value, qty);
+  if (!parentValidation.ok) return parentValidation;
+
+  for (const gift of comboGifts.value) {
+    const requestedQty = Number(gift.cantidad || 0) * qty;
+    const validation = validateProductQuantity(gift, requestedQty);
+    if (!validation.ok) return validation;
+  }
+
+  return { ok: true };
+}
+
+function resetComboDialog() {
+  comboParent.value = null;
+  comboGifts.value = [];
+  comboQty.value = 1;
+  comboParentSearch.value = "";
+  comboGiftSearch.value = "";
+  comboParentResults.value = [];
+  comboGiftResults.value = [];
+}
+
+function addComboToSale() {
+  const validation = validateComboStock();
+  if (!validation.ok) {
+    showAlert("warning", validation.message);
+    return;
+  }
+
+  const comboGroup = `COMBO-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+  const parentLine = normalizeProductForSale(comboParent.value, comboQty.value);
+  parentLine.precio = Number(comboUnitPrice.value || 0);
+  parentLine.combo_role = "parent";
+  parentLine.combo_group = comboGroup;
+  recalculateItem(parentLine);
+  saleItems.value.push(parentLine);
+
+  comboGifts.value.forEach((gift) => {
+    const giftQty = Number(gift.cantidad || 0) * Number(comboQty.value || 0);
+    if (giftQty <= 0) return;
+    const giftLine = normalizeProductForSale(gift, giftQty);
+    giftLine.precio = 0;
+    giftLine.combo_role = "gift";
+    giftLine.combo_group = comboGroup;
+    recalculateItem(giftLine);
+    saleItems.value.push(giftLine);
+  });
+
+  showAlert("success", "Combo agregado al ticket.");
+  comboDialog.value = false;
+  resetComboDialog();
+  focusSearchInput();
+}
+
 function validateSaleStock() {
   const problems = [];
   const grouped = new Map();
@@ -1255,16 +1519,19 @@ function validateSaleStock() {
 
 function removeSaleItem(itemId) {
   const item = saleItems.value.find((entry) => entry.id === itemId);
+  const group = item?.combo_group || null;
   confirm.require({
-    header: "Quitar producto",
-    message: `Confirma quitar ${item?.cod_producto || "este producto"} del ticket actual.`,
+    header: group ? "Quitar combo" : "Quitar producto",
+    message: group
+      ? "Confirma quitar el combo completo del ticket actual."
+      : `Confirma quitar ${item?.cod_producto || "este producto"} del ticket actual.`,
     icon: "bi bi-trash",
     rejectLabel: "Cancelar",
     acceptLabel: "Quitar",
     acceptClass: "p-button-danger",
     accept: () => {
-      saleItems.value = saleItems.value.filter((entry) => entry.id !== itemId);
-      showAlert("success", "Producto retirado del ticket.");
+      saleItems.value = saleItems.value.filter((entry) => (group ? entry.combo_group !== group : entry.id !== itemId));
+      showAlert("success", group ? "Combo retirado del ticket." : "Producto retirado del ticket.");
     },
   });
 }
@@ -1351,6 +1618,7 @@ function clearSale() {
   searchQuery.value = "";
   searchResults.value = [];
   searchActiveIndex.value = -1;
+  saleForm.date = todayIsoDate();
   saleForm.observacion = "";
   saleForm.condition = "CONTADO";
   saleForm.invoice_currency = "CS";
@@ -1517,6 +1785,8 @@ async function confirmSale() {
         cod_producto: item.cod_producto,
         descripcion: item.descripcion,
         unidad: item.unidad_medida_abreviatura || "UND",
+        combo_role: item.combo_role || null,
+        combo_group: item.combo_group || null,
       })),
       payments: saleForm.condition === "CREDITO"
         ? []
@@ -1577,24 +1847,10 @@ async function loadCatalogs() {
 }
 
 function defaultSalesBodegaId() {
-  const preferred = catalogs.bodegas.find((item) => /central/i.test(`${item.code || ""} ${item.name || ""}`));
-  return preferred?.id || catalogs.bodegas[0]?.id || null;
-}
-
-function applyVendorBodega(vendor, { silent = false } = {}) {
-  if (!vendor?.bodega_id || saleForm.bodega_id === vendor.bodega_id) return;
-  if (isPrincipalBodega(vendor.bodega_id) && !silent) return;
-  const exists = catalogs.bodegas.some((item) => item.id === vendor.bodega_id);
-  if (!exists) return;
-  saleForm.bodega_id = vendor.bodega_id;
-  if (!silent) {
-    showAlert("warning", "Bodega actualizada segun el vendedor seleccionado.");
-  }
-}
-
-function isPrincipalBodega(bodegaId) {
-  const bodega = catalogs.bodegas.find((item) => item.id === bodegaId);
-  return /principal|bod-001/i.test(`${bodega?.code || ""} ${bodega?.name || ""}`);
+  const assignedBodegaId = currentAccessProfile.value?.bodega_id;
+  const assignedExists = catalogs.bodegas.some((item) => item.id === assignedBodegaId);
+  if (assignedBodegaId && assignedExists) return assignedBodegaId;
+  return catalogs.bodegas[0]?.id || null;
 }
 
 async function loadVendors() {
@@ -1613,6 +1869,8 @@ async function loadVendors() {
           nombre: vendor.nombre,
           bodega_id: vendor.bodega_id,
           sucursal_id: vendor.sucursal_id,
+          sucursal_name: vendor.sucursal_name,
+          bodega_name: vendor.bodega_name,
           user_id: vendor.user_id,
         }))
       : vendors.value;
@@ -1742,6 +2000,52 @@ watch(
 );
 
 watch(
+  () => comboParentSearch.value,
+  () => {
+    if (comboParentTimeout.value) clearTimeout(comboParentTimeout.value);
+    const query = comboParentSearch.value.trim();
+    if (query.length < 2) {
+      comboParentResults.value = [];
+      return;
+    }
+    comboParentTimeout.value = setTimeout(async () => {
+      comboSearchingParent.value = true;
+      try {
+        const response = await searchInventoryProducts(query, saleForm.bodega_id || null, 1);
+        comboParentResults.value = response.items || [];
+      } catch {
+        comboParentResults.value = [];
+      } finally {
+        comboSearchingParent.value = false;
+      }
+    }, 160);
+  },
+);
+
+watch(
+  () => comboGiftSearch.value,
+  () => {
+    if (comboGiftTimeout.value) clearTimeout(comboGiftTimeout.value);
+    const query = comboGiftSearch.value.trim();
+    if (query.length < 2) {
+      comboGiftResults.value = [];
+      return;
+    }
+    comboGiftTimeout.value = setTimeout(async () => {
+      comboSearchingGift.value = true;
+      try {
+        const response = await searchInventoryProducts(query, saleForm.bodega_id || null, 1);
+        comboGiftResults.value = (response.items || []).filter((item) => item.id !== comboParent.value?.id);
+      } catch {
+        comboGiftResults.value = [];
+      } finally {
+        comboSearchingGift.value = false;
+      }
+    }, 160);
+  },
+);
+
+watch(
   () => saleForm.invoice_currency,
   async () => {
     saleItems.value.forEach((item) => {
@@ -1793,31 +2097,21 @@ watch(
 
 onMounted(async () => {
   await Promise.all([loadCatalogs(), loadVendors(), loadCustomers(), loadBusinessSettings(), loadCurrentExchangeRate(), loadNextInvoice()]);
+  saleForm.date = todayIsoDate();
   saleForm.bodega_id = defaultSalesBodegaId();
   if (vendors.value.length) {
     saleForm.vendedor_id = vendors.value[0].id;
-    if (!isPrincipalBodega(vendors.value[0].bodega_id)) {
-      applyVendorBodega(vendors.value[0], { silent: true });
-    }
   }
   setDefaultCustomer();
   focusSearchInput();
   window.addEventListener("keydown", handleGlobalScanner);
-  document.addEventListener("mousedown", handleSaleDateOutsideClick);
 });
-
-watch(
-  () => saleForm.vendedor_id,
-  (vendorId, previousVendorId) => {
-    if (!vendorId || vendorId === previousVendorId) return;
-    applyVendorBodega(selectedVendor.value);
-  },
-);
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", handleGlobalScanner);
-  document.removeEventListener("mousedown", handleSaleDateOutsideClick);
   if (searchTimeout.value) clearTimeout(searchTimeout.value);
+  if (comboParentTimeout.value) clearTimeout(comboParentTimeout.value);
+  if (comboGiftTimeout.value) clearTimeout(comboGiftTimeout.value);
   if (barcodeResetTimer.value) clearTimeout(barcodeResetTimer.value);
 });
 </script>

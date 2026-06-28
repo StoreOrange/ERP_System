@@ -9,7 +9,7 @@ from sqlalchemy import or_, text
 from .config import settings as app_settings
 from .core.security import hash_password
 from .database import Base, SessionLocal, engine
-from .models.inventory import Bodega, EgresoTipo, IngresoTipo, Linea, Marca, Producto, Proveedor, Segmento, UnidadMedida
+from .models.inventory import Bodega, EgresoTipo, IngresoTipo, Linea, Marca, Producto, ProductoCombo, Proveedor, Segmento, UnidadMedida
 from .models.sales import Customer, SalesInvoice, SalesInvoiceItem, SalesPayment, SalesSequence
 from .models.settings import BusinessSetting, CompanyEnvironment, ExchangeRate
 from .models.user import Branch, Role, User, UserAccessProfile, Vendor
@@ -221,6 +221,44 @@ def seed_inventory_catalogs():
                     """
                     ALTER TABLE productos
                     ADD COLUMN IF NOT EXISTS tipo_producto VARCHAR(30) DEFAULT 'DIRECTO'
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS producto_combos (
+                        id SERIAL PRIMARY KEY,
+                        parent_producto_id INTEGER NOT NULL REFERENCES productos(id),
+                        child_producto_id INTEGER NOT NULL REFERENCES productos(id),
+                        cantidad NUMERIC(12, 2) DEFAULT 1,
+                        activo BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT NOW()
+                    )
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    CREATE UNIQUE INDEX IF NOT EXISTS uq_producto_combo_child_idx
+                    ON producto_combos (parent_producto_id, child_producto_id)
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    ALTER TABLE sales_invoice_items
+                    ADD COLUMN IF NOT EXISTS combo_role VARCHAR(20)
+                    """
+                )
+            )
+            connection.execute(
+                text(
+                    """
+                    ALTER TABLE sales_invoice_items
+                    ADD COLUMN IF NOT EXISTS combo_group VARCHAR(60)
                     """
                 )
             )

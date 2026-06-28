@@ -13,6 +13,7 @@ from .inventory import (
     PacaAperturaOrigen,
     PacaAperturaLinea,
     Producto,
+    ProductoCombo,
     Proveedor,
     SaldoProducto,
     Segmento,

@@ -51,6 +51,23 @@ export function saveProductRecipe(productId, payload) {
   });
 }
 
+export function fetchProductCombo(productId) {
+  return apiRequest(`/inventory/products/${productId}/combo`);
+}
+
+export function saveProductComboItem(productId, payload) {
+  return apiRequest(`/inventory/products/${productId}/combo`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteProductComboItem(productId, comboId) {
+  return apiRequest(`/inventory/products/${productId}/combo/${comboId}`, {
+    method: "DELETE",
+  });
+}
+
 export function createMarca(payload) {
   return apiRequest("/inventory/marcas", {
     method: "POST",

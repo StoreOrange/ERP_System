@@ -97,6 +97,29 @@ class Producto(Base):
         back_populates="insumo",
         foreign_keys="ProductoRecetaLinea.insumo_producto_id",
     )
+    combo_children = relationship(
+        "ProductoCombo",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        foreign_keys="ProductoCombo.parent_producto_id",
+    )
+
+
+class ProductoCombo(Base):
+    __tablename__ = "producto_combos"
+    __table_args__ = (
+        UniqueConstraint("parent_producto_id", "child_producto_id", name="uq_producto_combo_child"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    parent_producto_id = Column(Integer, ForeignKey("productos.id"), nullable=False)
+    child_producto_id = Column(Integer, ForeignKey("productos.id"), nullable=False)
+    cantidad = Column(Numeric(12, 2), default=1)
+    activo = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    parent = relationship("Producto", foreign_keys=[parent_producto_id], back_populates="combo_children")
+    child = relationship("Producto", foreign_keys=[child_producto_id])
 
 
 class ProductoReceta(Base):
