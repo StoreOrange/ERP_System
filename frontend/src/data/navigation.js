@@ -30,8 +30,18 @@ export const appNavigation = [
     route: "/app/sales",
   },
   {
+    label: "Cierre de Caja Diario",
+    icon: "bi-cash-coin",
+    route: "/app/sales/cash-close",
+  },
+  {
     label: "Datos y Configuraciones",
     icon: "bi-buildings",
     route: "/app/settings/business",
+  },
+  {
+    label: "Upgrade",
+    icon: "bi-cloud-download",
+    route: "/app/settings/upgrade",
   },
 ];

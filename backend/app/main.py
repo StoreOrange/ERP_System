@@ -13,7 +13,7 @@ from .models.inventory import Bodega, EgresoTipo, IngresoTipo, Linea, Marca, Pro
 from .models.sales import Customer, SalesInvoice, SalesInvoiceItem, SalesPayment, SalesSequence
 from .models.settings import BusinessSetting, CompanyEnvironment, ExchangeRate
 from .models.user import Branch, Role, User, UserAccessProfile, Vendor
-from .routers import access, auth, inventory, sales, settings
+from .routers import access, auth, inventory, sales, settings, upgrade
 
 app = FastAPI(title="Sistema de planificacion de recursos empresariales Backend")
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -35,6 +35,7 @@ app.include_router(access.router)
 app.include_router(inventory.router)
 app.include_router(sales.router)
 app.include_router(settings.router)
+app.include_router(upgrade.router)
 app.mount("/media", StaticFiles(directory=UPLOADS_DIR), name="media")
 
 

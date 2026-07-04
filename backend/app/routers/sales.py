@@ -1,4 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
+from datetime import date
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -7,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
 from ..models.inventory import Bodega, EgresoInventario, EgresoItem, EgresoTipo, Producto
-from ..models.sales import Customer, SalesInvoice, SalesInvoiceItem, SalesPayment, SalesSequence
+from ..models.sales import CashClose, CashCloseMovement, Customer, SalesInvoice, SalesInvoiceItem, SalesPayment, SalesSequence
 from ..models.settings import BusinessSetting
 from ..routers.inventory import (
     _balances_by_bodega,
@@ -23,6 +24,9 @@ from ..schemas.sales import (
     CustomerCreate,
     CustomerResponse,
     CustomerUpdate,
+    CashCloseCreate,
+    CashCloseResponse,
+    CashCloseSummaryResponse,
     SalesInvoiceCreate,
     SalesInvoiceResponse,
     SalesNextInvoiceResponse,
@@ -51,6 +55,64 @@ def _peek_invoice_number(db: Session) -> str:
     sequence = db.query(SalesSequence).filter(SalesSequence.prefix == "POS").first()
     next_value = int(sequence.current_value or 0) + 1 if sequence else 1
     return f"POS-{next_value:06d}"
+
+
+def _next_cash_close_number(db: Session) -> str:
+    next_value = (db.query(func.count(CashClose.id)).scalar() or 0) + 1
+    return f"CC-{next_value:06d}"
+
+
+def _payment_bucket(payment: SalesPayment) -> str:
+    code = (payment.forma_codigo or "").strip().lower()
+    name = (payment.forma_nombre or "").strip().lower()
+    if code in {"cash", "efectivo"} or "efectivo" in name:
+        return "cash"
+    if code in {"card", "tarjeta"} or "tarjeta" in name:
+        return "card"
+    if code in {"transfer", "transferencia"} or "transfer" in name:
+        return "transfer"
+    return "other"
+
+
+def _cash_close_summary(db: Session, fecha, bodega_id: int | None = None) -> dict:
+    invoice_query = db.query(SalesInvoice).filter(SalesInvoice.fecha == fecha, SalesInvoice.status != "ANULADA")
+    if bodega_id:
+        invoice_query = invoice_query.filter(SalesInvoice.bodega_id == bodega_id)
+    invoices = invoice_query.all()
+    invoice_ids = [invoice.id for invoice in invoices]
+
+    totals = {
+        "invoice_count": len(invoices),
+        "total_ventas_cs": _money(sum((invoice.total_cs or 0) for invoice in invoices)),
+        "total_ventas_usd": _money(sum((invoice.total_usd or 0) for invoice in invoices)),
+        "efectivo_ventas_cs": Decimal("0.00"),
+        "tarjeta_ventas_cs": Decimal("0.00"),
+        "transferencia_ventas_cs": Decimal("0.00"),
+        "otros_pagos_cs": Decimal("0.00"),
+    }
+    if invoice_ids:
+        for payment in db.query(SalesPayment).filter(SalesPayment.invoice_id.in_(invoice_ids)).all():
+            amount = _money(payment.monto_cs)
+            bucket = _payment_bucket(payment)
+            if bucket == "cash":
+                totals["efectivo_ventas_cs"] += amount
+            elif bucket == "card":
+                totals["tarjeta_ventas_cs"] += amount
+            elif bucket == "transfer":
+                totals["transferencia_ventas_cs"] += amount
+            else:
+                totals["otros_pagos_cs"] += amount
+
+    closed = db.query(CashClose).filter(CashClose.fecha == fecha, CashClose.bodega_id == bodega_id).first()
+    bodega = db.query(Bodega).filter(Bodega.id == bodega_id).first() if bodega_id else None
+    return {
+        "fecha": fecha,
+        "bodega_id": bodega_id,
+        "bodega_name": bodega.name if bodega else None,
+        "has_closed": bool(closed),
+        "closed_id": closed.id if closed else None,
+        **totals,
+    }
 
 
 def _resolve_venta_tipo(db: Session) -> EgresoTipo:
@@ -168,6 +230,101 @@ def list_invoices(db: Session = Depends(get_db)):
         .order_by(SalesInvoice.id.desc())
         .limit(100)
         .all()
+    )
+
+
+@router.get("/cash-close/summary", response_model=CashCloseSummaryResponse)
+def get_cash_close_summary(fecha: date, bodega_id: int | None = None, db: Session = Depends(get_db)):
+    return _cash_close_summary(db, fecha, bodega_id)
+
+
+@router.get("/cash-close", response_model=List[CashCloseResponse])
+def list_cash_closures(db: Session = Depends(get_db)):
+    return (
+        db.query(CashClose)
+        .options(joinedload(CashClose.movements))
+        .order_by(CashClose.fecha.desc(), CashClose.id.desc())
+        .limit(60)
+        .all()
+    )
+
+
+@router.post("/cash-close", response_model=CashCloseResponse, status_code=status.HTTP_201_CREATED)
+def create_cash_close(payload: CashCloseCreate, db: Session = Depends(get_db)):
+    if payload.bodega_id and not db.query(Bodega).filter(Bodega.id == payload.bodega_id).first():
+        raise HTTPException(status_code=404, detail="Bodega no encontrada")
+    exists = db.query(CashClose).filter(CashClose.fecha == payload.fecha, CashClose.bodega_id == payload.bodega_id).first()
+    if exists:
+        raise HTTPException(status_code=400, detail="Ya existe un cierre de caja para esa fecha y bodega")
+
+    summary = _cash_close_summary(db, payload.fecha, payload.bodega_id)
+    ingresos = Decimal("0.00")
+    egresos = Decimal("0.00")
+    normalized_movements = []
+    for movement in payload.movements:
+        tipo = (movement.tipo or "").strip().upper()
+        if tipo not in {"INGRESO", "EGRESO"}:
+            raise HTTPException(status_code=400, detail="Tipo de movimiento invalido")
+        monto = _money(movement.monto_cs)
+        if monto <= 0:
+            raise HTTPException(status_code=400, detail="El monto de ingresos y egresos debe ser mayor que cero")
+        concepto = (movement.concepto or "").strip()
+        if not concepto:
+            raise HTTPException(status_code=400, detail="El concepto del movimiento es requerido")
+        if tipo == "INGRESO":
+            ingresos += monto
+        else:
+            egresos += monto
+        normalized_movements.append((tipo, concepto, monto, (movement.referencia or "").strip() or None))
+
+    efectivo_esperado = _money(summary["efectivo_ventas_cs"] + ingresos - egresos)
+    efectivo_fisico = _money(payload.efectivo_fisico_cs)
+    diferencia = _money(efectivo_fisico - efectivo_esperado)
+    if diferencia > 0:
+        resultado = "SOBRANTE"
+    elif diferencia < 0:
+        resultado = "FALTANTE"
+    else:
+        resultado = "CUADRADO"
+
+    closure = CashClose(
+        cierre_numero=_next_cash_close_number(db),
+        fecha=payload.fecha,
+        bodega_id=payload.bodega_id,
+        usuario_registro=(payload.usuario_registro or "").strip() or None,
+        total_ventas_cs=summary["total_ventas_cs"],
+        total_ventas_usd=summary["total_ventas_usd"],
+        efectivo_ventas_cs=summary["efectivo_ventas_cs"],
+        tarjeta_ventas_cs=summary["tarjeta_ventas_cs"],
+        transferencia_ventas_cs=summary["transferencia_ventas_cs"],
+        otros_pagos_cs=summary["otros_pagos_cs"],
+        ingresos_caja_cs=ingresos,
+        egresos_caja_cs=egresos,
+        efectivo_esperado_cs=efectivo_esperado,
+        efectivo_fisico_cs=efectivo_fisico,
+        diferencia_cs=diferencia,
+        resultado=resultado,
+        observacion=(payload.observacion or "").strip() or None,
+        status="CERRADO",
+    )
+    db.add(closure)
+    db.flush()
+    for tipo, concepto, monto, referencia in normalized_movements:
+        db.add(
+            CashCloseMovement(
+                closure_id=closure.id,
+                tipo=tipo,
+                concepto=concepto,
+                monto_cs=monto,
+                referencia=referencia,
+            )
+        )
+    db.commit()
+    return (
+        db.query(CashClose)
+        .options(joinedload(CashClose.movements))
+        .filter(CashClose.id == closure.id)
+        .first()
     )
 
 

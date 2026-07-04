@@ -6,7 +6,9 @@ import MovementsView from "../views/inventory/MovementsView.vue";
 import PacaOpeningView from "../views/inventory/PacaOpeningView.vue";
 import ProductionView from "../views/inventory/ProductionView.vue";
 import SalesView from "../views/sales/SalesView.vue";
+import CashCloseView from "../views/sales/CashCloseView.vue";
 import BusinessSettingsView from "../views/settings/BusinessSettingsView.vue";
+import UpgradeView from "../views/settings/UpgradeView.vue";
 import UsersView from "../views/users/UsersView.vue";
 
 export const routes = [
@@ -61,9 +63,19 @@ export const routes = [
         component: SalesView,
       },
       {
+        path: "sales/cash-close",
+        name: "cash-close",
+        component: CashCloseView,
+      },
+      {
         path: "settings/business",
         name: "business-settings",
         component: BusinessSettingsView,
+      },
+      {
+        path: "settings/upgrade",
+        name: "settings-upgrade",
+        component: UpgradeView,
       },
     ],
   },

@@ -40,3 +40,22 @@ export function createSalesInvoice(payload) {
 export function fetchSalesInvoices() {
   return apiRequest("/sales-api/invoices");
 }
+
+export function fetchCashCloseSummary(fecha, bodegaId = null) {
+  const params = new URLSearchParams({ fecha });
+  if (bodegaId) {
+    params.set("bodega_id", String(bodegaId));
+  }
+  return apiRequest(`/sales-api/cash-close/summary?${params.toString()}`);
+}
+
+export function fetchCashClosures() {
+  return apiRequest("/sales-api/cash-close");
+}
+
+export function createCashClose(payload) {
+  return apiRequest("/sales-api/cash-close", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}

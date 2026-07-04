@@ -143,3 +143,71 @@ class SalesInvoiceResponse(BaseModel):
 
 class SalesNextInvoiceResponse(BaseModel):
     invoice_number: str
+
+
+class CashCloseMovementCreate(BaseModel):
+    tipo: str
+    concepto: str
+    monto_cs: Decimal
+    referencia: Optional[str] = None
+
+
+class CashCloseCreate(BaseModel):
+    fecha: date
+    bodega_id: Optional[int] = None
+    efectivo_fisico_cs: Decimal
+    observacion: Optional[str] = None
+    usuario_registro: Optional[str] = None
+    movements: List[CashCloseMovementCreate] = Field(default_factory=list)
+
+
+class CashCloseMovementResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    tipo: str
+    concepto: str
+    monto_cs: Decimal
+    referencia: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
+class CashCloseSummaryResponse(BaseModel):
+    fecha: date
+    bodega_id: Optional[int] = None
+    bodega_name: Optional[str] = None
+    invoice_count: int = 0
+    total_ventas_cs: Decimal
+    total_ventas_usd: Decimal
+    efectivo_ventas_cs: Decimal
+    tarjeta_ventas_cs: Decimal
+    transferencia_ventas_cs: Decimal
+    otros_pagos_cs: Decimal
+    has_closed: bool = False
+    closed_id: Optional[int] = None
+
+
+class CashCloseResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    cierre_numero: str
+    fecha: date
+    bodega_id: Optional[int] = None
+    usuario_registro: Optional[str] = None
+    total_ventas_cs: Decimal
+    total_ventas_usd: Decimal
+    efectivo_ventas_cs: Decimal
+    tarjeta_ventas_cs: Decimal
+    transferencia_ventas_cs: Decimal
+    otros_pagos_cs: Decimal
+    ingresos_caja_cs: Decimal
+    egresos_caja_cs: Decimal
+    efectivo_esperado_cs: Decimal
+    efectivo_fisico_cs: Decimal
+    diferencia_cs: Decimal
+    resultado: str
+    observacion: Optional[str] = None
+    status: str
+    created_at: Optional[datetime] = None
+    movements: List[CashCloseMovementResponse] = Field(default_factory=list)

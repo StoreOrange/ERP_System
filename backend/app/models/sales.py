@@ -105,3 +105,46 @@ class SalesSequence(Base):
     current_value = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, default=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class CashClose(Base):
+    __tablename__ = "cash_closures"
+    __table_args__ = (UniqueConstraint("fecha", "bodega_id", name="uq_cash_closure_fecha_bodega"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    cierre_numero = Column(String(40), unique=True, nullable=False, index=True)
+    fecha = Column(Date, nullable=False, index=True)
+    bodega_id = Column(Integer, ForeignKey("bodegas.id"), nullable=True)
+    usuario_registro = Column(String(120), nullable=True)
+    total_ventas_cs = Column(Numeric(14, 2), default=0)
+    total_ventas_usd = Column(Numeric(14, 2), default=0)
+    efectivo_ventas_cs = Column(Numeric(14, 2), default=0)
+    tarjeta_ventas_cs = Column(Numeric(14, 2), default=0)
+    transferencia_ventas_cs = Column(Numeric(14, 2), default=0)
+    otros_pagos_cs = Column(Numeric(14, 2), default=0)
+    ingresos_caja_cs = Column(Numeric(14, 2), default=0)
+    egresos_caja_cs = Column(Numeric(14, 2), default=0)
+    efectivo_esperado_cs = Column(Numeric(14, 2), default=0)
+    efectivo_fisico_cs = Column(Numeric(14, 2), default=0)
+    diferencia_cs = Column(Numeric(14, 2), default=0)
+    resultado = Column(String(20), nullable=False, default="CUADRADO")
+    observacion = Column(Text, nullable=True)
+    status = Column(String(20), nullable=False, default="CERRADO")
+    created_at = Column(DateTime, server_default=func.now())
+
+    bodega = relationship("Bodega")
+    movements = relationship("CashCloseMovement", back_populates="closure", cascade="all, delete-orphan")
+
+
+class CashCloseMovement(Base):
+    __tablename__ = "cash_close_movements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    closure_id = Column(Integer, ForeignKey("cash_closures.id"), nullable=False)
+    tipo = Column(String(20), nullable=False)
+    concepto = Column(String(160), nullable=False)
+    monto_cs = Column(Numeric(14, 2), default=0)
+    referencia = Column(String(120), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    closure = relationship("CashClose", back_populates="movements")
