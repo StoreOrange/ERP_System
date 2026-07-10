@@ -1,88 +1,35 @@
 <template>
   <section class="page-section cash-close-page">
-    <div class="module-hero">
-      <div class="module-hero-copy">
-        <p class="page-kicker">Ventas y Facturacion</p>
-        <h1 class="page-title">Cierre de Caja Diario</h1>
-        <p class="panel-text">
-          Compara ventas cobradas en efectivo contra arqueo fisico, ingresos y egresos de caja.
-        </p>
-      </div>
-      <div class="module-hero-meta">
-        <div class="module-meta-box">
-          <span>Fecha</span>
-          <strong>{{ closeDate }}</strong>
-        </div>
-        <div class="module-meta-box">
-          <span>Esperado</span>
-          <strong>C$ {{ formatMoney(expectedCash) }}</strong>
-        </div>
-        <div class="module-meta-box">
-          <span>Diferencia</span>
-          <strong :class="differenceClass">C$ {{ formatMoney(difference) }}</strong>
-        </div>
-      </div>
-    </div>
-
     <div v-if="alert.message" class="settings-feedback" :class="alert.type === 'success' ? 'settings-feedback-success' : 'settings-feedback-error'">
       <i class="bi" :class="alert.type === 'success' ? 'bi-check-circle-fill' : 'bi-exclamation-circle-fill'"></i>
       <span>{{ alert.message }}</span>
     </div>
 
     <div class="cash-close-layout">
-      <article class="panel-card cash-close-panel cash-close-main-panel">
+      <article class="panel-card cash-count-panel">
         <div class="panel-head">
           <div>
-            <span class="products-section-kicker">Arqueo</span>
-            <h3>Resumen del dia</h3>
+            <span class="products-section-kicker">Cierre de caja</span>
+            <h3>Desglose de denominaciones</h3>
           </div>
-          <Tag :severity="resultSeverity" :value="resultLabel" />
         </div>
 
-        <div class="product-form-grid">
+        <div class="cash-close-controls">
           <label class="field-group">
-            <span>Fecha de cierre</span>
+            <span>Fecha</span>
             <input v-model="closeDate" class="form-control" type="date" @change="loadSummary" />
           </label>
           <label class="field-group">
             <span>Bodega</span>
             <select v-model="bodegaId" class="form-control" @change="loadSummary">
               <option :value="null">Todas</option>
-              <option v-for="bodega in bodegas" :key="bodega.id" :value="bodega.id">
-                {{ bodega.name }}
-              </option>
+              <option v-for="bodega in bodegas" :key="bodega.id" :value="bodega.id">{{ bodega.name }}</option>
             </select>
           </label>
           <label class="field-group">
             <span>Tasa de cambio</span>
             <input v-model.number="exchangeRate" class="form-control" type="number" min="0" step="0.0001" />
           </label>
-          <label class="field-group field-span-2">
-            <span>Observacion</span>
-            <input v-model.trim="observation" class="form-control" placeholder="Nota del cierre, turno o responsable" />
-          </label>
-        </div>
-
-        <div class="cash-close-kpis">
-          <div><span>Facturas</span><strong>{{ summary.invoice_count || 0 }}</strong></div>
-          <div><span>Total ventas</span><strong>C$ {{ formatMoney(summary.total_ventas_cs) }}</strong></div>
-          <div><span>Efectivo ventas</span><strong>C$ {{ formatMoney(summary.efectivo_ventas_cs) }}</strong></div>
-          <div><span>Tarjeta</span><strong>C$ {{ formatMoney(summary.tarjeta_ventas_cs) }}</strong></div>
-          <div><span>Transferencias</span><strong>C$ {{ formatMoney(summary.transferencia_ventas_cs) }}</strong></div>
-          <div><span>Otros pagos</span><strong>C$ {{ formatMoney(summary.otros_pagos_cs) }}</strong></div>
-        </div>
-      </article>
-
-      <article class="panel-card cash-count-panel">
-        <div class="panel-head">
-          <div>
-            <span class="products-section-kicker">Conteo de efectivo</span>
-            <h3>Denominaciones</h3>
-          </div>
-          <div class="cash-rate-pill">
-            <span>Tasa</span>
-            <strong>C$ {{ formatMoney(exchangeRate) }}</strong>
-          </div>
         </div>
 
         <div class="cash-denomination-grid">
@@ -146,121 +93,23 @@
         </div>
 
         <div class="cash-close-totals">
-          <div><span>Ingresos caja</span><strong>C$ {{ formatMoney(incomeTotal) }}</strong></div>
-          <div><span>Egresos caja</span><strong>C$ {{ formatMoney(expenseTotal) }}</strong></div>
-          <div><span>Efectivo esperado</span><strong>C$ {{ formatMoney(expectedCash) }}</strong></div>
           <div><span>Total C$ contado</span><strong>C$ {{ formatMoney(totalCordobas) }}</strong></div>
           <div><span>Total USD contado</span><strong>US$ {{ formatMoney(totalDollars) }}</strong></div>
           <div><span>USD en C$</span><strong>C$ {{ formatMoney(totalDollarsInCordobas) }}</strong></div>
           <div><span>Efectivo fisico C$</span><strong>C$ {{ formatMoney(cashCounted) }}</strong></div>
-          <div><span>Resultado</span><strong :class="differenceClass">{{ resultLabel }}</strong></div>
-          <div><span>Diferencia</span><strong :class="differenceClass">C$ {{ formatMoney(difference) }}</strong></div>
         </div>
 
         <div class="product-form-actions">
-          <Button type="button" severity="secondary" variant="outlined" icon="bi bi-arrow-clockwise" label="Recalcular" @click="loadSummary" />
-          <Button type="button" icon="bi bi-check2-circle" :disabled="saving || summary.has_closed" :label="summary.has_closed ? 'Cierre ya registrado' : saving ? 'Cerrando...' : 'Cerrar caja'" @click="submitClose" />
+          <Button type="button" icon="bi bi-check2-circle" :disabled="saving || summary.has_closed" :label="summary.has_closed ? 'Cierre ya registrado' : saving ? 'Registrando...' : 'Registrar cierre'" @click="submitClose" />
         </div>
-      </article>
-
-      <article class="panel-card cash-close-voucher-note">
-        <div>
-          <span class="products-section-kicker">Vales de caja</span>
-          <h3>Ingresos y egresos incluidos automaticamente</h3>
-          <p class="panel-text">
-            Los vales registrados en Ventas y Facturacion > Vales de Caja con "Afecta arqueo" se suman o restan en este cierre.
-          </p>
-        </div>
-        <RouterLink class="cash-close-voucher-link" to="/app/sales/cash-vouchers">
-          <i class="bi bi-receipt"></i>
-          Abrir Vales de Caja
-        </RouterLink>
       </article>
     </div>
-
-    <article v-if="lastClose" class="panel-card cash-close-receipt">
-      <div class="panel-head">
-        <div>
-          <span class="products-section-kicker">Comprobante POS</span>
-          <h3>{{ lastClose.cierre_numero }}</h3>
-        </div>
-        <Button type="button" icon="bi bi-printer" label="Imprimir cierre" @click="printClose" />
-      </div>
-      <div class="cash-receipt-print">
-        <div class="receipt-center">
-          <h3>Cierre de caja</h3>
-          <p>{{ lastClose.cierre_numero }}</p>
-          <p>{{ lastClose.fecha }} - {{ closeTimeLabel }}</p>
-          <p>{{ selectedBodegaName }}</p>
-        </div>
-        <hr />
-        <div class="receipt-lines">
-          <div><span>Responsable</span><strong>{{ lastClose.usuario_registro || "Sistema" }}</strong></div>
-          <div><span>Total facturas</span><strong>{{ receiptInvoiceCount }}</strong></div>
-          <div><span>Ventas C$</span><strong>C$ {{ formatMoney(lastClose.total_ventas_cs) }}</strong></div>
-          <div><span>Ventas USD</span><strong>US$ {{ formatMoney(lastClose.total_ventas_usd) }}</strong></div>
-        </div>
-        <hr />
-        <h4>Formas de pago</h4>
-        <div class="receipt-lines">
-          <div><span>Efectivo</span><strong>C$ {{ formatMoney(lastClose.efectivo_ventas_cs) }}</strong></div>
-          <div><span>Tarjeta</span><strong>C$ {{ formatMoney(lastClose.tarjeta_ventas_cs) }}</strong></div>
-          <div><span>Transferencia</span><strong>C$ {{ formatMoney(lastClose.transferencia_ventas_cs) }}</strong></div>
-          <div><span>Otros pagos</span><strong>C$ {{ formatMoney(lastClose.otros_pagos_cs) }}</strong></div>
-        </div>
-        <hr />
-        <h4>Arqueo</h4>
-        <div class="receipt-lines">
-          <div><span>Efectivo ventas</span><strong>C$ {{ formatMoney(lastClose.efectivo_ventas_cs) }}</strong></div>
-          <div><span>Ingresos caja</span><strong>C$ {{ formatMoney(lastClose.ingresos_caja_cs) }}</strong></div>
-          <div><span>Egresos caja</span><strong>C$ {{ formatMoney(lastClose.egresos_caja_cs) }}</strong></div>
-          <div><span>Efectivo esperado</span><strong>C$ {{ formatMoney(lastClose.efectivo_esperado_cs) }}</strong></div>
-          <div><span>Total C$ contado</span><strong>C$ {{ formatMoney(lastClose.total_efectivo_cs) }}</strong></div>
-          <div><span>Total USD contado</span><strong>US$ {{ formatMoney(lastClose.total_efectivo_usd) }}</strong></div>
-          <div><span>Tasa cambio</span><strong>C$ {{ formatMoney(lastClose.tasa_cambio) }}</strong></div>
-          <div><span>Efectivo fisico C$</span><strong>C$ {{ formatMoney(lastClose.efectivo_fisico_cs) }}</strong></div>
-          <div><span>Diferencia</span><strong>C$ {{ formatMoney(lastClose.diferencia_cs) }}</strong></div>
-        </div>
-        <section v-if="receiptCordobaDetails.length || receiptDollarDetails.length" class="receipt-movements">
-          <hr />
-          <h4>Desglose USD</h4>
-          <div v-for="item in receiptDollarDetails" :key="`usd-${item.denom}`" class="receipt-movement-row">
-            <span>US$ {{ formatDenomination(item.denom) }} x {{ item.quantity }}</span>
-            <strong>US$ {{ formatMoney(item.total) }}</strong>
-          </div>
-          <h4>Desglose C$</h4>
-          <div v-for="item in receiptCordobaDetails" :key="`cs-${item.denom}`" class="receipt-movement-row">
-            <span>C$ {{ formatDenomination(item.denom) }} x {{ item.quantity }}</span>
-            <strong>C$ {{ formatMoney(item.total) }}</strong>
-          </div>
-        </section>
-        <section v-if="lastClose.movements?.length" class="receipt-movements">
-          <hr />
-          <h4>Movimientos</h4>
-          <div v-for="movement in lastClose.movements" :key="movement.id" class="receipt-movement-row">
-            <span>{{ movement.tipo }} - {{ movement.concepto }}</span>
-            <strong>{{ movement.tipo === "INGRESO" ? "+" : "-" }} C$ {{ formatMoney(movement.monto_cs) }}</strong>
-          </div>
-        </section>
-        <hr />
-        <div class="receipt-result" :class="String(lastClose.resultado || '').toLowerCase()">
-          <span>{{ lastClose.resultado }}</span>
-          <strong>C$ {{ formatMoney(lastClose.diferencia_cs) }}</strong>
-        </div>
-        <p v-if="lastClose.observacion" class="receipt-note">Obs: {{ lastClose.observacion }}</p>
-        <div class="receipt-signature">
-          <span>Firma responsable</span>
-        </div>
-      </div>
-    </article>
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from "vue";
-import { RouterLink } from "vue-router";
 import Button from "primevue/button";
-import Tag from "primevue/tag";
 
 import { fetchInventoryCatalogs } from "../../services/inventory";
 import { createCashClose, fetchCashCloseSummary } from "../../services/sales";
