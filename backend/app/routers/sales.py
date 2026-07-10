@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import date
 from typing import List
@@ -8,11 +9,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
 from ..models.inventory import Bodega, EgresoInventario, EgresoItem, EgresoTipo, Producto
-from ..models.sales import CashClose, CashCloseMovement, Customer, SalesInvoice, SalesInvoiceItem, SalesPayment, SalesSequence
+from ..models.sales import CashClose, CashCloseMovement, CashVoucher, Customer, SalesInvoice, SalesInvoiceItem, SalesPayment, SalesSequence
 from ..models.settings import BusinessSetting
 from ..routers.inventory import (
     _balances_by_bodega,
     _cost_pair_from_amount,
+    _current_exchange_rate_value,
     _get_business_settings,
     _get_or_create_saldo,
     _normalize_currency,
@@ -27,6 +29,8 @@ from ..schemas.sales import (
     CashCloseCreate,
     CashCloseResponse,
     CashCloseSummaryResponse,
+    CashVoucherCreate,
+    CashVoucherResponse,
     SalesInvoiceCreate,
     SalesInvoiceResponse,
     SalesNextInvoiceResponse,
@@ -60,6 +64,11 @@ def _peek_invoice_number(db: Session) -> str:
 def _next_cash_close_number(db: Session) -> str:
     next_value = (db.query(func.count(CashClose.id)).scalar() or 0) + 1
     return f"CC-{next_value:06d}"
+
+
+def _next_cash_voucher_number(db: Session) -> str:
+    next_value = (db.query(func.count(CashVoucher.id)).scalar() or 0) + 1
+    return f"VC-{next_value:06d}"
 
 
 def _payment_bucket(payment: SalesPayment) -> str:
@@ -103,6 +112,21 @@ def _cash_close_summary(db: Session, fecha, bodega_id: int | None = None) -> dic
             else:
                 totals["otros_pagos_cs"] += amount
 
+    voucher_query = db.query(CashVoucher).filter(
+        CashVoucher.fecha == fecha,
+        CashVoucher.afecta_caja.is_(True),
+        CashVoucher.status == "EMITIDO",
+    )
+    if bodega_id:
+        voucher_query = voucher_query.filter(CashVoucher.bodega_id == bodega_id)
+    vouchers = voucher_query.all()
+    totals["ingresos_caja_cs"] = _money(
+        sum((voucher.monto_cs or 0) for voucher in vouchers if (voucher.tipo or "").upper() == "INGRESO")
+    )
+    totals["egresos_caja_cs"] = _money(
+        sum((voucher.monto_cs or 0) for voucher in vouchers if (voucher.tipo or "").upper() == "EGRESO")
+    )
+
     closed = db.query(CashClose).filter(CashClose.fecha == fecha, CashClose.bodega_id == bodega_id).first()
     bodega = db.query(Bodega).filter(Bodega.id == bodega_id).first() if bodega_id else None
     return {
@@ -113,6 +137,21 @@ def _cash_close_summary(db: Session, fecha, bodega_id: int | None = None) -> dic
         "closed_id": closed.id if closed else None,
         **totals,
     }
+
+
+def _cash_detail_total(detail: dict[str, Decimal] | None) -> tuple[dict[str, float], Decimal]:
+    normalized = {}
+    total = Decimal("0.00")
+    for denom_key, quantity_value in (detail or {}).items():
+        denom = Decimal(str(denom_key or 0))
+        quantity = Decimal(str(quantity_value or 0))
+        if denom <= 0:
+            continue
+        if quantity < 0:
+            raise HTTPException(status_code=400, detail="Las cantidades de denominaciones no pueden ser negativas")
+        normalized[str(denom)] = float(quantity)
+        total += denom * quantity
+    return normalized, _money(total)
 
 
 def _resolve_venta_tipo(db: Session) -> EgresoTipo:
@@ -249,6 +288,67 @@ def list_cash_closures(db: Session = Depends(get_db)):
     )
 
 
+@router.get("/cash-vouchers", response_model=List[CashVoucherResponse])
+def list_cash_vouchers(
+    start_date: date | None = None,
+    end_date: date | None = None,
+    bodega_id: int | None = None,
+    db: Session = Depends(get_db),
+):
+    query = db.query(CashVoucher)
+    if start_date:
+        query = query.filter(CashVoucher.fecha >= start_date)
+    if end_date:
+        query = query.filter(CashVoucher.fecha <= end_date)
+    if bodega_id:
+        query = query.filter(CashVoucher.bodega_id == bodega_id)
+    return query.order_by(CashVoucher.fecha.desc(), CashVoucher.id.desc()).limit(200).all()
+
+
+@router.post("/cash-vouchers", response_model=CashVoucherResponse, status_code=status.HTTP_201_CREATED)
+def create_cash_voucher(payload: CashVoucherCreate, db: Session = Depends(get_db)):
+    if payload.bodega_id and not db.query(Bodega).filter(Bodega.id == payload.bodega_id).first():
+        raise HTTPException(status_code=404, detail="Bodega no encontrada")
+    tipo = (payload.tipo or "").strip().upper()
+    if tipo not in {"INGRESO", "EGRESO"}:
+        raise HTTPException(status_code=400, detail="Tipo de vale invalido")
+    rubro = (payload.rubro or "").strip()
+    motivo = (payload.motivo or "").strip()
+    if not rubro or not motivo:
+        raise HTTPException(status_code=400, detail="Rubro y motivo son requeridos")
+    moneda = _normalize_currency(payload.moneda)
+    monto = _money(payload.monto)
+    if monto <= 0:
+        raise HTTPException(status_code=400, detail="El monto debe ser mayor que cero")
+    tasa = Decimal(str(payload.tasa_cambio or 0))
+    if moneda == "USD" and tasa <= 0:
+        try:
+            tasa = _current_exchange_rate_value(db)
+        except HTTPException as exc:
+            raise HTTPException(status_code=400, detail="Registra una tasa de cambio vigente para vales en dolares.") from exc
+    monto_usd, monto_cs = _to_currency_pair(monto, moneda, tasa)
+    voucher = CashVoucher(
+        numero=_next_cash_voucher_number(db),
+        fecha=payload.fecha,
+        bodega_id=payload.bodega_id,
+        tipo=tipo,
+        rubro=rubro,
+        motivo=motivo,
+        descripcion=(payload.descripcion or "").strip() or None,
+        moneda=moneda,
+        tasa_cambio=tasa if tasa > 0 else None,
+        monto_usd=monto_usd,
+        monto_cs=monto_cs,
+        afecta_caja=bool(payload.afecta_caja),
+        status="EMITIDO",
+        usuario_registro=(payload.usuario_registro or "").strip() or None,
+    )
+    db.add(voucher)
+    db.commit()
+    db.refresh(voucher)
+    return voucher
+
+
 @router.post("/cash-close", response_model=CashCloseResponse, status_code=status.HTTP_201_CREATED)
 def create_cash_close(payload: CashCloseCreate, db: Session = Depends(get_db)):
     if payload.bodega_id and not db.query(Bodega).filter(Bodega.id == payload.bodega_id).first():
@@ -258,8 +358,8 @@ def create_cash_close(payload: CashCloseCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Ya existe un cierre de caja para esa fecha y bodega")
 
     summary = _cash_close_summary(db, payload.fecha, payload.bodega_id)
-    ingresos = Decimal("0.00")
-    egresos = Decimal("0.00")
+    ingresos = _money(summary["ingresos_caja_cs"])
+    egresos = _money(summary["egresos_caja_cs"])
     normalized_movements = []
     for movement in payload.movements:
         tipo = (movement.tipo or "").strip().upper()
@@ -277,8 +377,20 @@ def create_cash_close(payload: CashCloseCreate, db: Session = Depends(get_db)):
             egresos += monto
         normalized_movements.append((tipo, concepto, monto, (movement.referencia or "").strip() or None))
 
+    detalle_cs, total_efectivo_cs = _cash_detail_total(payload.detalle_cs)
+    detalle_usd, total_efectivo_usd = _cash_detail_total(payload.detalle_usd)
+    tasa_cambio = Decimal(str(payload.tasa_cambio or 0))
+    if total_efectivo_usd > 0 and tasa_cambio <= 0:
+        try:
+            tasa_cambio = _current_exchange_rate_value(db)
+        except HTTPException as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Registra una tasa de cambio vigente antes de cerrar caja con dolares.",
+            ) from exc
+    efectivo_denominado_cs = _money(total_efectivo_cs + (total_efectivo_usd * tasa_cambio))
     efectivo_esperado = _money(summary["efectivo_ventas_cs"] + ingresos - egresos)
-    efectivo_fisico = _money(payload.efectivo_fisico_cs)
+    efectivo_fisico = efectivo_denominado_cs if detalle_cs or detalle_usd else _money(payload.efectivo_fisico_cs)
     diferencia = _money(efectivo_fisico - efectivo_esperado)
     if diferencia > 0:
         resultado = "SOBRANTE"
@@ -300,6 +412,11 @@ def create_cash_close(payload: CashCloseCreate, db: Session = Depends(get_db)):
         otros_pagos_cs=summary["otros_pagos_cs"],
         ingresos_caja_cs=ingresos,
         egresos_caja_cs=egresos,
+        detalle_cs=json.dumps(detalle_cs, sort_keys=True),
+        detalle_usd=json.dumps(detalle_usd, sort_keys=True),
+        total_efectivo_cs=total_efectivo_cs,
+        total_efectivo_usd=total_efectivo_usd,
+        tasa_cambio=tasa_cambio if tasa_cambio > 0 else None,
         efectivo_esperado_cs=efectivo_esperado,
         efectivo_fisico_cs=efectivo_fisico,
         diferencia_cs=diferencia,

@@ -25,9 +25,14 @@ export const appNavigation = [
     route: "/app/inventory/paca-opening",
   },
   {
-    label: "Ventas",
+    label: "Ventas y Facturacion",
     icon: "bi-cart-check",
     route: "/app/sales",
+  },
+  {
+    label: "Vales de Caja",
+    icon: "bi-receipt",
+    route: "/app/sales/cash-vouchers",
   },
   {
     label: "Cierre de Caja Diario",

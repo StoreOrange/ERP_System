@@ -147,7 +147,7 @@ const breadcrumbItems = computed(() => {
     : route.path.includes("/settings")
       ? "Datos"
       : route.path.includes("/sales")
-        ? "Ventas"
+        ? "Ventas y Facturacion"
         : route.path.includes("/users")
           ? "Seguridad"
           : "Aplicaciones";
@@ -164,10 +164,11 @@ const panelNavigation = computed(() => [
     command: () => goTo("/app/dashboard"),
   },
   {
-    label: "Comercial",
+    label: "Ventas y Facturacion",
     icon: "bi bi-shop",
     items: [
-      { label: "Ventas", icon: "bi bi-cart-check", command: () => goTo("/app/sales") },
+      { label: "Ventas y Facturacion", icon: "bi bi-cart-check", command: () => goTo("/app/sales") },
+      { label: "Vales de Caja", icon: "bi bi-receipt", command: () => goTo("/app/sales/cash-vouchers") },
       { label: "Cierre de caja diario", icon: "bi bi-cash-coin", command: () => goTo("/app/sales/cash-close") },
     ],
   },
@@ -197,7 +198,8 @@ const routeLabelMap = {
   "inventory-movements": "Ingresos y egresos",
   "inventory-paca-opening": "Apertura de pacas",
   "inventory-production": "Produccion",
-  sales: "Ventas",
+  sales: "Ventas y Facturacion",
+  "cash-vouchers": "Vales de Caja",
   "cash-close": "Cierre de caja diario",
   "business-settings": "Datos y configuraciones",
   "settings-upgrade": "Upgrade",

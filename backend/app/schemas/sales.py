@@ -156,6 +156,11 @@ class CashCloseCreate(BaseModel):
     fecha: date
     bodega_id: Optional[int] = None
     efectivo_fisico_cs: Decimal
+    detalle_cs: dict[str, Decimal] = Field(default_factory=dict)
+    detalle_usd: dict[str, Decimal] = Field(default_factory=dict)
+    total_efectivo_cs: Decimal = Decimal("0")
+    total_efectivo_usd: Decimal = Decimal("0")
+    tasa_cambio: Optional[Decimal] = None
     observacion: Optional[str] = None
     usuario_registro: Optional[str] = None
     movements: List[CashCloseMovementCreate] = Field(default_factory=list)
@@ -172,6 +177,41 @@ class CashCloseMovementResponse(BaseModel):
     created_at: Optional[datetime] = None
 
 
+class CashVoucherCreate(BaseModel):
+    fecha: date
+    bodega_id: Optional[int] = None
+    tipo: str
+    rubro: str
+    motivo: str
+    descripcion: Optional[str] = None
+    moneda: str = "CS"
+    tasa_cambio: Optional[Decimal] = None
+    monto: Decimal
+    afecta_caja: bool = True
+    usuario_registro: Optional[str] = None
+
+
+class CashVoucherResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    numero: str
+    fecha: date
+    bodega_id: Optional[int] = None
+    tipo: str
+    rubro: str
+    motivo: str
+    descripcion: Optional[str] = None
+    moneda: str
+    tasa_cambio: Optional[Decimal] = None
+    monto_usd: Decimal
+    monto_cs: Decimal
+    afecta_caja: bool = True
+    status: str
+    usuario_registro: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
 class CashCloseSummaryResponse(BaseModel):
     fecha: date
     bodega_id: Optional[int] = None
@@ -183,6 +223,8 @@ class CashCloseSummaryResponse(BaseModel):
     tarjeta_ventas_cs: Decimal
     transferencia_ventas_cs: Decimal
     otros_pagos_cs: Decimal
+    ingresos_caja_cs: Decimal = Decimal("0")
+    egresos_caja_cs: Decimal = Decimal("0")
     has_closed: bool = False
     closed_id: Optional[int] = None
 
@@ -203,6 +245,11 @@ class CashCloseResponse(BaseModel):
     otros_pagos_cs: Decimal
     ingresos_caja_cs: Decimal
     egresos_caja_cs: Decimal
+    detalle_cs: Optional[str] = None
+    detalle_usd: Optional[str] = None
+    total_efectivo_cs: Decimal = Decimal("0")
+    total_efectivo_usd: Decimal = Decimal("0")
+    tasa_cambio: Optional[Decimal] = None
     efectivo_esperado_cs: Decimal
     efectivo_fisico_cs: Decimal
     diferencia_cs: Decimal

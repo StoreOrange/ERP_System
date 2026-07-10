@@ -59,3 +59,19 @@ export function createCashClose(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export function fetchCashVouchers(startDate = "", endDate = "", bodegaId = null) {
+  const params = new URLSearchParams();
+  if (startDate) params.set("start_date", startDate);
+  if (endDate) params.set("end_date", endDate);
+  if (bodegaId) params.set("bodega_id", String(bodegaId));
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return apiRequest(`/sales-api/cash-vouchers${suffix}`);
+}
+
+export function createCashVoucher(payload) {
+  return apiRequest("/sales-api/cash-vouchers", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}

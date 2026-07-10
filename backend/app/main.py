@@ -4,13 +4,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import or_, text
+from sqlalchemy import inspect, or_, text
 
 from .config import settings as app_settings
 from .core.security import hash_password
 from .database import Base, SessionLocal, engine
 from .models.inventory import Bodega, EgresoTipo, IngresoTipo, Linea, Marca, Producto, ProductoCombo, Proveedor, Segmento, UnidadMedida
-from .models.sales import Customer, SalesInvoice, SalesInvoiceItem, SalesPayment, SalesSequence
+from .models.sales import CashVoucher, Customer, SalesInvoice, SalesInvoiceItem, SalesPayment, SalesSequence
 from .models.settings import BusinessSetting, CompanyEnvironment, ExchangeRate
 from .models.user import Branch, Role, User, UserAccessProfile, Vendor
 from .routers import access, auth, inventory, sales, settings, upgrade
@@ -29,6 +29,44 @@ app.add_middleware(
 )
 
 Base.metadata.create_all(bind=engine)
+
+
+def ensure_cash_close_columns():
+    inspector = inspect(engine)
+    if "cash_closures" not in inspector.get_table_names():
+        return
+    existing_columns = {column["name"] for column in inspector.get_columns("cash_closures")}
+    column_sql = {
+        "detalle_cs": "TEXT",
+        "detalle_usd": "TEXT",
+        "total_efectivo_cs": "NUMERIC(14, 2) DEFAULT 0",
+        "total_efectivo_usd": "NUMERIC(14, 2) DEFAULT 0",
+        "tasa_cambio": "NUMERIC(12, 4)",
+    }
+    with engine.begin() as conn:
+        for column_name, sql_type in column_sql.items():
+            if column_name not in existing_columns:
+                conn.execute(text(f"ALTER TABLE cash_closures ADD COLUMN {column_name} {sql_type}"))
+
+
+ensure_cash_close_columns()
+
+
+def ensure_cash_voucher_columns():
+    inspector = inspect(engine)
+    if "cash_vouchers" not in inspector.get_table_names():
+        return
+    existing_columns = {column["name"] for column in inspector.get_columns("cash_vouchers")}
+    column_sql = {
+        "status": "VARCHAR(20) DEFAULT 'EMITIDO'",
+    }
+    with engine.begin() as conn:
+        for column_name, sql_type in column_sql.items():
+            if column_name not in existing_columns:
+                conn.execute(text(f"ALTER TABLE cash_vouchers ADD COLUMN {column_name} {sql_type}"))
+
+
+ensure_cash_voucher_columns()
 
 app.include_router(auth.router)
 app.include_router(access.router)

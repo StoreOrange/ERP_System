@@ -124,6 +124,11 @@ class CashClose(Base):
     otros_pagos_cs = Column(Numeric(14, 2), default=0)
     ingresos_caja_cs = Column(Numeric(14, 2), default=0)
     egresos_caja_cs = Column(Numeric(14, 2), default=0)
+    detalle_cs = Column(Text, nullable=True)
+    detalle_usd = Column(Text, nullable=True)
+    total_efectivo_cs = Column(Numeric(14, 2), default=0)
+    total_efectivo_usd = Column(Numeric(14, 2), default=0)
+    tasa_cambio = Column(Numeric(12, 4), nullable=True)
     efectivo_esperado_cs = Column(Numeric(14, 2), default=0)
     efectivo_fisico_cs = Column(Numeric(14, 2), default=0)
     diferencia_cs = Column(Numeric(14, 2), default=0)
@@ -134,6 +139,29 @@ class CashClose(Base):
 
     bodega = relationship("Bodega")
     movements = relationship("CashCloseMovement", back_populates="closure", cascade="all, delete-orphan")
+
+
+class CashVoucher(Base):
+    __tablename__ = "cash_vouchers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    numero = Column(String(40), unique=True, nullable=False, index=True)
+    fecha = Column(Date, nullable=False, index=True)
+    bodega_id = Column(Integer, ForeignKey("bodegas.id"), nullable=True)
+    tipo = Column(String(20), nullable=False)
+    rubro = Column(String(120), nullable=False)
+    motivo = Column(String(160), nullable=False)
+    descripcion = Column(Text, nullable=True)
+    moneda = Column(String(10), nullable=False, default="CS")
+    tasa_cambio = Column(Numeric(12, 4), nullable=True)
+    monto_usd = Column(Numeric(14, 2), default=0)
+    monto_cs = Column(Numeric(14, 2), default=0)
+    afecta_caja = Column(Boolean, default=True)
+    status = Column(String(20), nullable=False, default="EMITIDO")
+    usuario_registro = Column(String(120), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    bodega = relationship("Bodega")
 
 
 class CashCloseMovement(Base):

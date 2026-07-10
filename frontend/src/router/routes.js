@@ -7,6 +7,7 @@ import PacaOpeningView from "../views/inventory/PacaOpeningView.vue";
 import ProductionView from "../views/inventory/ProductionView.vue";
 import SalesView from "../views/sales/SalesView.vue";
 import CashCloseView from "../views/sales/CashCloseView.vue";
+import CashVouchersView from "../views/sales/CashVouchersView.vue";
 import BusinessSettingsView from "../views/settings/BusinessSettingsView.vue";
 import UpgradeView from "../views/settings/UpgradeView.vue";
 import UsersView from "../views/users/UsersView.vue";
@@ -66,6 +67,11 @@ export const routes = [
         path: "sales/cash-close",
         name: "cash-close",
         component: CashCloseView,
+      },
+      {
+        path: "sales/cash-vouchers",
+        name: "cash-vouchers",
+        component: CashVouchersView,
       },
       {
         path: "settings/business",
