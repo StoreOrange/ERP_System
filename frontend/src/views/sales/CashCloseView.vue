@@ -305,13 +305,18 @@ onMounted(async () => {
 
 .cash-close-controls {
   display: grid;
-  grid-template-columns: 13rem minmax(16rem, 1fr) 12rem;
+  grid-template-columns: 12rem minmax(16rem, 1fr) 12rem;
   gap: 0.75rem;
   align-items: end;
 }
 
+.cash-close-date-field {
+  max-width: 12rem;
+}
+
 .cash-close-date-field .form-control {
-  max-width: 13rem;
+  width: 12rem;
+  max-width: 100%;
 }
 
 .cash-movements-panel {
@@ -639,8 +644,8 @@ onMounted(async () => {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .cash-close-date-field .form-control {
-    max-width: none;
+  .cash-close-date-field {
+    max-width: 12rem;
   }
 
   .cash-close-voucher-note {
@@ -672,6 +677,12 @@ onMounted(async () => {
 
   .cash-denomination-row .form-control {
     height: 2rem;
+  }
+
+  .cash-close-date-field,
+  .cash-close-date-field .form-control {
+    width: 100%;
+    max-width: none;
   }
 }
 </style>
