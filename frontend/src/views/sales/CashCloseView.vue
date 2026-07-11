@@ -304,27 +304,31 @@ onMounted(async () => {
 }
 
 .cash-close-controls {
-  display: grid;
-  grid-template-columns: 12rem 16rem 11rem;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   align-items: end;
-  justify-content: start;
 }
 
 .cash-close-compact-field {
-  width: 100%;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 .cash-close-date-field {
-  max-width: 12rem;
+  width: 12rem;
 }
 
 .cash-close-bodega-field {
-  max-width: 16rem;
+  width: 16rem;
 }
 
 .cash-close-rate-field {
-  max-width: 11rem;
+  width: 11rem;
+}
+
+.cash-close-compact-field .form-control {
+  width: 100%;
 }
 
 .cash-movements-panel {
@@ -646,22 +650,13 @@ onMounted(async () => {
   .cash-close-layout,
   .cash-close-kpis,
   .cash-close-totals,
-  .cash-close-controls,
   .cash-denomination-grid,
   .cash-movement-form {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .cash-close-date-field {
-    max-width: 12rem;
-  }
-
-  .cash-close-bodega-field {
-    max-width: 16rem;
-  }
-
-  .cash-close-rate-field {
-    max-width: 11rem;
+  .cash-close-controls {
+    display: flex;
   }
 
   .cash-close-voucher-note {
