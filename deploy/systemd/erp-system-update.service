@@ -1,0 +1,14 @@
+[Unit]
+Description=Update ERP System from Git and restart Docker Compose
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=__APP_DIR__
+Environment=APP_DIR=__APP_DIR__
+Environment=REMOTE=origin
+Environment=BRANCH=main
+ExecStart=__UPDATE_SCRIPT__
+TimeoutStartSec=0
