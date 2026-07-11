@@ -45,5 +45,5 @@ docker compose logs -f backend frontend
 Los puertos salen de `.env`:
 
 - Frontend: `FRONTEND_PORT`, por defecto `5310`
-- Backend: `BACKEND_PORT`, por defecto `8010`
+- Backend: `BACKEND_PORT`, por defecto `8011`
 - PostgreSQL: `POSTGRES_PORT`, por defecto `5433`

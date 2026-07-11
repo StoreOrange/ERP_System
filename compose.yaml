@@ -21,12 +21,12 @@ services:
       context: ./backend
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-1234}@db:5432/${POSTGRES_DB:-ERPDB}
-      FRONTEND_URL: http://localhost:${FRONTEND_PORT:-5174}
+      FRONTEND_URL: http://localhost:${FRONTEND_PORT:-5310}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-SUPER_SECRET_KEY_CHANGE_THIS}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-480}
     command: sh -c "python scripts/wait_for_db.py && alembic upgrade head && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
     ports:
-      - "${BACKEND_PORT:-8001}:8000"
+      - "${BACKEND_PORT:-8011}:8000"
     volumes:
       - ./backend:/app
     depends_on:
@@ -38,10 +38,10 @@ services:
     build:
       context: ./frontend
     environment:
-      VITE_API_BASE_URL: http://localhost:${BACKEND_PORT:-8001}
+      VITE_API_BASE_URL: http://localhost:${BACKEND_PORT:-8011}
     command: npm run dev -- --host 0.0.0.0 --port 5173
     ports:
-      - "${FRONTEND_PORT:-5174}:5173"
+      - "${FRONTEND_PORT:-5310}:5173"
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
