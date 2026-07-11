@@ -15,7 +15,7 @@
         </div>
 
         <div class="cash-close-controls">
-          <label class="field-group">
+          <label class="field-group cash-close-date-field">
             <span>Fecha</span>
             <input v-model="closeDate" class="form-control" type="date" @change="loadSummary" />
           </label>
@@ -301,6 +301,17 @@ onMounted(async () => {
 .cash-count-panel {
   display: grid;
   gap: 1rem;
+}
+
+.cash-close-controls {
+  display: grid;
+  grid-template-columns: 13rem minmax(16rem, 1fr) 12rem;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.cash-close-date-field .form-control {
+  max-width: 13rem;
 }
 
 .cash-movements-panel {
@@ -622,9 +633,14 @@ onMounted(async () => {
   .cash-close-layout,
   .cash-close-kpis,
   .cash-close-totals,
+  .cash-close-controls,
   .cash-denomination-grid,
   .cash-movement-form {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cash-close-date-field .form-control {
+    max-width: none;
   }
 
   .cash-close-voucher-note {
