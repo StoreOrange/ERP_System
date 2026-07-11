@@ -14,6 +14,7 @@ cd "$APP_DIR"
 
 install -m 0755 deploy/update_erp.sh /usr/local/bin/update-erp-system
 git config --global --add safe.directory "$APP_DIR" >/dev/null 2>&1 || true
+git config --system --add safe.directory "$APP_DIR" >/dev/null 2>&1 || true
 
 sed "s|__APP_DIR__|$APP_DIR|g; s|__SERVICE_NAME__|$SERVICE_NAME|g" \
   deploy/systemd/erp-system.service >/etc/systemd/system/"$SERVICE_NAME".service

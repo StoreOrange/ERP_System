@@ -23,7 +23,7 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
-git config --global --add safe.directory "$APP_DIR" >/dev/null 2>&1 || true
+GIT=(git -c safe.directory="$APP_DIR")
 
 if ! command -v docker >/dev/null 2>&1; then
   log "docker no esta instalado."
@@ -40,16 +40,16 @@ if [ ! -f .env ]; then
   cp .env.example .env
 fi
 
-if [ -n "$(git status --porcelain)" ]; then
+if [ -n "$("${GIT[@]}" status --porcelain)" ]; then
   log "Hay cambios locales sin commit en $APP_DIR. No se actualiza para no sobrescribirlos."
-  git status --short
+  "${GIT[@]}" status --short
   exit 1
 fi
 
 log "Descargando cambios desde $REMOTE/$BRANCH."
-git fetch "$REMOTE" "$BRANCH"
-git checkout "$BRANCH"
-git pull --ff-only "$REMOTE" "$BRANCH"
+"${GIT[@]}" fetch "$REMOTE" "$BRANCH"
+"${GIT[@]}" checkout "$BRANCH"
+"${GIT[@]}" pull --ff-only "$REMOTE" "$BRANCH"
 
 log "Construyendo y levantando servicios."
 docker compose up --build -d --remove-orphans
