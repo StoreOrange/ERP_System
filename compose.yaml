@@ -24,7 +24,7 @@ services:
       FRONTEND_URL: http://localhost:${FRONTEND_PORT:-5174}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-SUPER_SECRET_KEY_CHANGE_THIS}
       JWT_ACCESS_TOKEN_EXPIRE_MINUTES: ${JWT_ACCESS_TOKEN_EXPIRE_MINUTES:-480}
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+    command: sh -c "python scripts/wait_for_db.py && alembic upgrade head && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
     ports:
       - "${BACKEND_PORT:-8001}:8000"
     volumes:
