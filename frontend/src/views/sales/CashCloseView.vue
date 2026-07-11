@@ -15,18 +15,18 @@
         </div>
 
         <div class="cash-close-controls">
-          <label class="field-group cash-close-date-field">
+          <label class="field-group cash-close-compact-field cash-close-date-field">
             <span>Fecha</span>
             <input v-model="closeDate" class="form-control" type="date" @change="loadSummary" />
           </label>
-          <label class="field-group">
+          <label class="field-group cash-close-compact-field cash-close-bodega-field">
             <span>Bodega</span>
             <select v-model="bodegaId" class="form-control" @change="loadSummary">
               <option :value="null">Todas</option>
               <option v-for="bodega in bodegas" :key="bodega.id" :value="bodega.id">{{ bodega.name }}</option>
             </select>
           </label>
-          <label class="field-group">
+          <label class="field-group cash-close-compact-field cash-close-rate-field">
             <span>Tasa de cambio</span>
             <input v-model.number="exchangeRate" class="form-control" type="number" min="0" step="0.0001" />
           </label>
@@ -305,18 +305,26 @@ onMounted(async () => {
 
 .cash-close-controls {
   display: grid;
-  grid-template-columns: 12rem minmax(16rem, 1fr) 12rem;
+  grid-template-columns: 12rem 16rem 11rem;
   gap: 0.75rem;
   align-items: end;
+  justify-content: start;
+}
+
+.cash-close-compact-field {
+  width: 100%;
 }
 
 .cash-close-date-field {
   max-width: 12rem;
 }
 
-.cash-close-date-field .form-control {
-  width: 12rem;
-  max-width: 100%;
+.cash-close-bodega-field {
+  max-width: 16rem;
+}
+
+.cash-close-rate-field {
+  max-width: 11rem;
 }
 
 .cash-movements-panel {
@@ -648,6 +656,14 @@ onMounted(async () => {
     max-width: 12rem;
   }
 
+  .cash-close-bodega-field {
+    max-width: 16rem;
+  }
+
+  .cash-close-rate-field {
+    max-width: 11rem;
+  }
+
   .cash-close-voucher-note {
     align-items: stretch;
     flex-direction: column;
@@ -679,8 +695,7 @@ onMounted(async () => {
     height: 2rem;
   }
 
-  .cash-close-date-field,
-  .cash-close-date-field .form-control {
+  .cash-close-compact-field {
     width: 100%;
     max-width: none;
   }
