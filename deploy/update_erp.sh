@@ -23,6 +23,8 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
+git config --global --add safe.directory "$APP_DIR" >/dev/null 2>&1 || true
+
 if ! command -v docker >/dev/null 2>&1; then
   log "docker no esta instalado."
   exit 1
