@@ -1,5 +1,5 @@
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8011";
+  import.meta.env.VITE_API_BASE_URL || "";
 
 export async function apiRequest(path, options = {}) {
   const token = localStorage.getItem("token");
