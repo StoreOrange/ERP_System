@@ -75,7 +75,7 @@
             <label class="field-group">
               <span>Rubro</span>
               <select v-model="form.rubro" class="form-control">
-                <option value="">Selecciona categoria contable</option>
+                <option value="">Selecciona tipo de {{ form.tipo === "EGRESO" ? "gasto" : "ingreso" }}</option>
                 <option v-for="rubro in filteredRubros" :key="rubro" :value="rubro">{{ rubro }}</option>
               </select>
             </label>
@@ -241,25 +241,45 @@ const form = reactive({
 
 const rubrosCatalog = {
   EGRESO: [
+    "Transporte",
+    "Fletes y acarreo",
+    "Combustible",
+    "Compras varias",
+    "Compra de insumos",
+    "Compra de mercaderia",
+    "Materiales de empaque",
+    "Materiales de limpieza",
+    "Papeleria y utiles",
+    "Alimentacion y viaticos",
+    "Servicios basicos",
+    "Alquiler",
+    "Mantenimiento y reparaciones",
+    "Seguridad",
     "Gastos administrativos",
     "Gastos de venta",
-    "Compras e insumos",
-    "Transporte y acarreo",
-    "Servicios basicos",
-    "Mantenimiento",
     "Otros gastos",
   ],
-  INGRESO: ["Ventas", "Cobros", "Anticipos", "Aportes", "Otros ingresos"],
+  INGRESO: [
+    "Venta de productos",
+    "Abono de cliente",
+    "Anticipo de cliente",
+    "Recuperacion de credito",
+    "Aporte de socio",
+    "Ajuste positivo de caja",
+    "Otros ingresos",
+  ],
 };
 
 const motivosCatalog = {
   EGRESO: [
+    "Transporte",
+    "Fletes y acarreo",
+    "Combustible",
+    "Compras varias",
     "Compra de insumos",
+    "Compra de mercaderia",
     "Compra de articulos de limpieza",
     "Compra de materiales de limpieza",
-    "Transporte",
-    "Acarreo",
-    "Combustible",
     "Viaticos",
     "Mantenimiento",
     "Reparaciones",
