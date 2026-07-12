@@ -9,7 +9,6 @@ import SalesView from "../views/sales/SalesView.vue";
 import CashCloseView from "../views/sales/CashCloseView.vue";
 import CashVouchersView from "../views/sales/CashVouchersView.vue";
 import BusinessSettingsView from "../views/settings/BusinessSettingsView.vue";
-import UpgradeView from "../views/settings/UpgradeView.vue";
 import UsersView from "../views/users/UsersView.vue";
 
 export const routes = [
@@ -80,8 +79,7 @@ export const routes = [
       },
       {
         path: "settings/upgrade",
-        name: "settings-upgrade",
-        component: UpgradeView,
+        redirect: "/app/dashboard",
       },
     ],
   },

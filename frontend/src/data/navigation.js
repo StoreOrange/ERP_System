@@ -44,9 +44,4 @@ export const appNavigation = [
     icon: "bi-buildings",
     route: "/app/settings/business",
   },
-  {
-    label: "Upgrade",
-    icon: "bi-cloud-download",
-    route: "/app/settings/upgrade",
-  },
 ];

@@ -187,7 +187,6 @@ const panelNavigation = computed(() => [
     items: [
       { label: "Usuarios", icon: "bi bi-people-fill", command: () => goTo("/app/users") },
       { label: "Datos y configuraciones", icon: "bi bi-sliders", command: () => goTo("/app/settings/business") },
-      { label: "Upgrade", icon: "bi bi-cloud-download", command: () => goTo("/app/settings/upgrade") },
     ],
   },
 ]);
@@ -202,7 +201,6 @@ const routeLabelMap = {
   "cash-vouchers": "Vales de Caja",
   "cash-close": "Cierre de caja diario",
   "business-settings": "Datos y configuraciones",
-  "settings-upgrade": "Upgrade",
 };
 
 function goTo(path) {

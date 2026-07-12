@@ -1,1 +1,1 @@
-from . import access, auth, inventory, sales, settings, upgrade
+from . import access, auth, inventory, sales, settings
